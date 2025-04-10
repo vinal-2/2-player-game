@@ -12,7 +12,7 @@ import { useAnalytics } from "../contexts/AnalyticsContext"
 // Import all game components
 import AirHockeyScreen from "../games/air-hockey/AirHockeyScreen"
 import TicTacToeScreen from "../games/tic-tac-toe/TicTacToeScreen"
-import PingPongScreen from "../games/ping-pong/PingPongScreen"
+import PingPongScreen from "../games/ping-pong/PingPongGame"
 import SpinnerWarScreen from "../games/spinner-war/SpinnerWarScreen"
 
 import AdModal from "../components/AdModal"

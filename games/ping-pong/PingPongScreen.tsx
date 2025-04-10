@@ -12,7 +12,7 @@ import {
   ImageBackground,
   Alert,
 } from "react-native"
-import { SafeAreaView } from "react-native-safe-area-context"
+import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons"
 import SoundContext from "../contexts/SoundContext"
 import ConfettiCannon from "react-native-confetti-cannon"
@@ -23,6 +23,8 @@ const BOARD_HEIGHT = height * 0.6
 const PADDLE_WIDTH = 100
 const PADDLE_HEIGHT = 20
 const BALL_SIZE = 15
+
+
 
 const PingPongScreen = ({ route, navigation }) => {
   const { mode } = route.params
