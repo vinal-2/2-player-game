@@ -108,5 +108,3 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 - Sound effects from [source]
 - Background music from [source]
 \`\`\`
-
-## Now, let's create the necessary placeholder images:
