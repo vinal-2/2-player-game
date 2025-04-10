@@ -19,6 +19,7 @@ import { useAd } from "../contexts/AdContext"
 import { useSeasonal } from "../contexts/SeasonalContext"
 import { useAnalytics } from "../contexts/AnalyticsContext"
 import { LinearGradient } from "expo-linear-gradient"
+import * as Linking from 'expo-linking';
 
 const SettingsScreen = ({ navigation }) => {
   const { isSoundEnabled, isMusicEnabled, toggleSound, toggleMusic, playSound } = useSound()
@@ -65,6 +66,15 @@ const SettingsScreen = ({ navigation }) => {
       navigation.navigate("Premium")
     }
   }
+
+  const handleContactPress = () => {
+    playSound(require("../assets/sounds/button-press.mp3"))
+    trackEvent("about_item_click", { item: "contact_us" });
+    Linking.openURL(`mailto:support@happypenguins.com?subject=Support Request`);
+  };
+
+
+
 
   const renderSettingItem = (icon, title, description, settingKey) => {
     return (
@@ -235,6 +245,28 @@ const SettingsScreen = ({ navigation }) => {
               </View>
               <Ionicons name="chevron-forward" size={20} color="#999" />
             </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.aboutItem}
+              onPress={handleContactPress}
+            >
+              <View style={styles.settingInfo}>
+                <View style={styles.settingIconContainer}>
+                  <Ionicons name="mail-outline" size={24} color="#FF6B00" />
+                </View>
+                <View style={styles.settingText}>
+                  <Text style={styles.settingTitle}>Contact Us</Text>
+                  <Text style={styles.settingDescription}>Get in touch for support</Text>
+                </View>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color="#999" />
+            </TouchableOpacity>
+
+            
+
+
+
+
           </View>
         </ScrollView>
 

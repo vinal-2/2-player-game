@@ -2,7 +2,8 @@
   "expo": {
     "name": "Kids Two Player Games",
     "slug": "kids-two-player-games",
-    "version": "1.0.0",
+    "version": "1.0.0",    
+    "buildNumber": "1",
     "orientation": "portrait",
     "icon": "./assets/images/logo.png",
     "userInterfaceStyle": "light",
