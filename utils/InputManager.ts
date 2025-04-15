@@ -4,15 +4,11 @@
  * Handles and normalizes user input across different input methods
  */
 export class InputManager {
-  \
   private static instance: InputManager;
-  \
-  private touchListeners: Map<string, (event: TouchEvent) => void> = new Map()
-  d;
-  > = new
-  Map()
-  private panListeners: Map<string, (gestureState: any) => void> = new Map()
-  private keyListeners: Map<string, (event: KeyboardEvent) => void> = new Map()
+
+  private touchListeners: Map<string, (event: TouchEvent) => void> = new Map();
+  private panListeners: Map<string, (gestureState: any) => void> = new Map();
+  private keyListeners: Map<string, (event: KeyboardEvent) => void> = new Map();
 
   // Singleton pattern
   public static getInstance(): InputManager {

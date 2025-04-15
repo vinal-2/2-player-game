@@ -2,8 +2,7 @@
   "expo": {
     "name": "Kids Two Player Games",
     "slug": "kids-two-player-games",
-    "version": "1.0.0",    
-    "buildNumber": "1",
+    "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/logo.png",
     "userInterfaceStyle": "light",
@@ -15,7 +14,9 @@
     "updates": {
       "fallbackToCacheTimeout": 0
     },
-    "assetBundlePatterns": ["**/*"],
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.yourcompany.kidsgames"
@@ -29,6 +30,11 @@
     },
     "web": {
       "favicon": "./assets/images/logo.png"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "84aea7a7-894e-4f85-ac2b-4d40aa79f9bf"
+      }
     }
   }
 }
