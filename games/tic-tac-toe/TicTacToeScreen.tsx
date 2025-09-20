@@ -1,98 +1,123 @@
 "use client"
 
 import type React from "react"
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import { SafeAreaView, ImageBackground } from "react-native"
+import AsyncStorage from "@react-native-async-storage/async-storage"
+
 import { TicTacToeView } from "./TicTacToeView"
-import { TicTacToeModel } from "./TicTacToeModel"
+import { TicTacToeModel, BotDifficulty } from "./TicTacToeModel"
 import { TicTacToeController } from "./TicTacToeController"
 import { GameEngine } from "../../core/GameEngine"
+import type { GameRuntimeProps } from "../../core/gameRuntime"
 import { useSound } from "../../contexts/SoundContext"
 import { useAnalytics } from "../../contexts/AnalyticsContext"
 import { useSeasonal } from "../../contexts/SeasonalContext"
 
-interface TicTacToeScreenProps {
-  route: {
-    params: {
-      mode: "friend" | "bot"
-    }
-  }
-  navigation: any
-}
+const SCORE_STORAGE_KEY = "tic-tac-toe-scores"
 
-/**
- * Tic Tac Toe Screen Component
- *
- * This component connects the Tic Tac Toe game to the React Native navigation
- */
-const TicTacToeScreen: React.FC<TicTacToeScreenProps> = ({ route, navigation }) => {
-  const { mode } = route.params
+const TicTacToeScreen: React.FC<GameRuntimeProps> = ({ gameId, mode, onExit, onEvent }) => {
   const { playSound } = useSound()
   const { trackEvent } = useAnalytics()
   const { getSeasonalGameBackground } = useSeasonal()
 
-  // Create model and controller
   const [model] = useState(() => new TicTacToeModel())
   const [controller] = useState(() => new TicTacToeController(model, mode))
+  const [difficulty, setDifficulty] = useState<BotDifficulty>("medium")
+  const [, forceUpdate] = useState(0)
 
-  // Get game engine
+  const notifyStateChange = useCallback(() => {
+    forceUpdate((value) => value + 1)
+  }, [])
+
+  useEffect(() => {
+    model.setOnStateChange(notifyStateChange)
+  }, [model, notifyStateChange])
+
+  useEffect(() => {
+    controller.setDifficulty(difficulty)
+  }, [controller, difficulty])
+
+  useEffect(() => {
+    const loadScores = async () => {
+      try {
+        const stored = await AsyncStorage.getItem(SCORE_STORAGE_KEY)
+        if (stored) {
+          const parsed = JSON.parse(stored)
+          if (parsed && typeof parsed.X === "number" && typeof parsed.O === "number") {
+            model.state.scores = parsed
+            notifyStateChange()
+          }
+        }
+      } catch (error) {
+        // ignore
+      }
+    }
+
+    loadScores()
+  }, [model, notifyStateChange])
+
   const gameEngine = GameEngine.getInstance()
 
-  // Register game with engine
   useEffect(() => {
-    gameEngine.registerGame("ticTacToe", model, controller)
+    gameEngine.registerGame(gameId, model, controller)
 
-    // Set up event handlers
     model.setOnGameOver((winner) => {
       if (winner === "draw") {
         playSound("draw")
-        trackEvent("game_draw", { game: "ticTacToe" })
+        trackEvent("game_draw", { game: gameId })
+        onEvent?.({ type: "game_over", payload: { winner: "draw" } })
       } else {
         playSound("win")
-        trackEvent("game_over", { game: "ticTacToe", winner })
+        trackEvent("game_over", { game: gameId, winner })
+        onEvent?.({ type: "game_over", payload: { winner } })
       }
     })
 
-    // Start the game
-    gameEngine.startGame("ticTacToe")
+    gameEngine.startGame(gameId)
     playSound("game-start")
-    trackEvent("game_start", { game: "ticTacToe", mode })
+    trackEvent("game_start", { game: gameId, mode, difficulty })
 
-    // Clean up
     return () => {
-      gameEngine.stopGame()
+      gameEngine.stopGame(gameId)
+      gameEngine.unregisterGame(gameId)
       controller.cleanup()
     }
-  }, [])
+  }, [controller, difficulty, gameEngine, gameId, mode, model, onEvent, playSound, trackEvent])
 
-  // Handle cell press
+  useEffect(() => {
+    AsyncStorage.setItem(SCORE_STORAGE_KEY, JSON.stringify(model.state.scores)).catch(() => undefined)
+  }, [model.state.scores.X, model.state.scores.O])
+
   const handleCellPress = (index: number) => {
     playSound("cell-tap")
     controller.handleInput({ type: "cellPress", index })
   }
 
-  // Handle reset
   const handleReset = () => {
     controller.handleInput({ type: "reset" })
     playSound("game-start")
-    trackEvent("game_reset", { game: "ticTacToe" })
+    trackEvent("game_reset", { game: gameId })
   }
 
-  // Handle reset scores
   const handleResetScores = () => {
     controller.handleInput({ type: "resetScores" })
     playSound("button-press")
-    trackEvent("scores_reset", { game: "ticTacToe" })
+    trackEvent("scores_reset", { game: gameId })
   }
 
-  // Handle back
   const handleBack = () => {
     playSound("button-press")
-    navigation.goBack()
+    onExit()
   }
 
-  // Get seasonal background or use default
-  const backgroundImage = getSeasonalGameBackground("tic-tac-toe") || require("../../assets/images/tic-tac-toe-bg.png")
+  const handleDifficultyChange = (level: BotDifficulty) => {
+    setDifficulty(level)
+    trackEvent("tic_tac_toe_difficulty", { game: gameId, level })
+    onEvent?.({ type: "custom", payload: { action: "difficulty", level } })
+  }
+
+  const backgroundImage = getSeasonalGameBackground(gameId) || require("../../assets/images/tic-tac-toe-bg.png")
 
   return (
     <ImageBackground source={backgroundImage} style={{ flex: 1 }}>
@@ -104,6 +129,8 @@ const TicTacToeScreen: React.FC<TicTacToeScreenProps> = ({ route, navigation }) 
           onResetScores={handleResetScores}
           onBack={handleBack}
           gameMode={mode}
+          difficulty={difficulty}
+          onDifficultyChange={handleDifficultyChange}
         />
       </SafeAreaView>
     </ImageBackground>

@@ -18,7 +18,7 @@ type AdContextType = {
 
 const AdContext = createContext<AdContextType | undefined>(undefined)
 
-export const AdProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+export type AdProviderProps = { children: React.ReactNode }\r\n\r\nexport const AdProvider: React.FC<AdProviderProps> = ({ children }) => {
   const { trackEvent } = useAnalytics()
   const [isPremium, setIsPremium] = useState(false)
   const [lastAdTime, setLastAdTime] = useState<number | null>(null)
@@ -169,3 +169,4 @@ export const useAd = () => {
   }
   return context
 }
+\r\n\r\nexport default AdContext\r\n

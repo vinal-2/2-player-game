@@ -33,6 +33,11 @@ export class GameEngine {
     this.gameControllers.set(id, controller)
   }
 
+  public unregisterGame(id: string): void {
+    this.gameModels.delete(id)
+    this.gameControllers.delete(id)
+  }
+
   /**
    * Starts the game loop for a specific game
    */
@@ -90,19 +95,24 @@ export class GameEngine {
   /**
    * Stops the current game
    */
-  public stopGame(): void {
-    if (this.gameLoopId !== null) {
+  public stopGame(gameId?: string): void {
+    if (this.gameLoopId !== null && (!gameId || this.isRunning)) {
       cancelAnimationFrame(this.gameLoopId)
       this.gameLoopId = null
     }
-    this.isRunning = false
 
-    // Reset all active games
-    for (const [id, model] of this.gameModels.entries()) {
-      if (model.isActive) {
+    if (gameId) {
+      const model = this.gameModels.get(gameId)
+      if (model) {
+        model.isActive = false
+      }
+    } else {
+      for (const model of this.gameModels.values()) {
         model.isActive = false
       }
     }
+
+    this.isRunning = false
   }
 
   /**

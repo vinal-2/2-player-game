@@ -11,18 +11,9 @@ import { useSeasonal } from "../../contexts/SeasonalContext"
 import SpinnerWarView from "./SpinnerWarView"
 import SpinnerWarModel from "./SpinnerWarModel"
 import SpinnerWarController from "./SpinnerWarController"
+import type { GameRuntimeProps } from "../../core/gameRuntime"
 
-interface SpinnerWarScreenProps {
-  route: {
-    params: {
-      mode: "friend" | "bot"
-    }
-  }
-  navigation: any
-}
-
-const SpinnerWarScreen: React.FC<SpinnerWarScreenProps> = ({ route, navigation }) => {
-  const { mode } = route.params
+const SpinnerWarScreen: React.FC<GameRuntimeProps> = ({ gameId, mode, onExit, onEvent }) => {
   const { playSound } = useSound()
   const { trackEvent } = useAnalytics()
   const { getSeasonalGameBackground } = useSeasonal()
@@ -33,19 +24,21 @@ const SpinnerWarScreen: React.FC<SpinnerWarScreenProps> = ({ route, navigation }
   const gameEngine = GameEngine.getInstance()
 
   useEffect(() => {
-    gameEngine.registerGame("spinnerWar", model, controller)
+    gameEngine.registerGame(gameId, model, controller)
 
     model.setOnGameOver((winner) => {
       playSound("win")
-      trackEvent("game_over", { game: "spinnerWar", winner })
+      trackEvent("game_over", { game: gameId, winner })
+      onEvent?.({ type: "game_over", payload: { winner } })
     })
 
-    gameEngine.startGame("spinnerWar")
+    gameEngine.startGame(gameId)
     playSound("game-start")
-    trackEvent("game_start", { game: "spinnerWar", mode })
+    trackEvent("game_start", { game: gameId, mode })
 
     return () => {
-      gameEngine.stopGame()
+      gameEngine.stopGame(gameId)
+      gameEngine.unregisterGame(gameId)
       controller.cleanup()
     }
   }, [])
@@ -53,19 +46,20 @@ const SpinnerWarScreen: React.FC<SpinnerWarScreenProps> = ({ route, navigation }
   const handleReset = () => {
     controller.handleInput({ type: "reset" })
     playSound("game-start")
-    trackEvent("game_reset", { game: "spinnerWar" })
+    trackEvent("game_reset", { game: gameId })
   }
 
   const handleBack = () => {
     playSound("button-press")
-    navigation.goBack()
+    onExit()
   }
   const handlePress = (index: number) => {
     playSound("button-press")
     controller.handleInput({ type: "press", index })
+    onEvent?.({ type: "custom", payload: { action: "press", index } })
   }
 
-  const backgroundImage = getSeasonalGameBackground("spinner-war") || require("../../assets/images/spinner-war-bg.png")
+  const backgroundImage = getSeasonalGameBackground(gameId) || require("../../assets/images/spinner-war-bg.png")
 
   return (
     <ImageBackground source={backgroundImage} style={{ flex: 1 }}>

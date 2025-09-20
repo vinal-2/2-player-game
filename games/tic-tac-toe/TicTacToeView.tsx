@@ -4,7 +4,7 @@ import type React from "react"
 import { useEffect, useRef } from "react"
 import { View, StyleSheet, TouchableOpacity, Text, Animated } from "react-native"
 import { Ionicons } from "@expo/vector-icons"
-import type { TicTacToeState } from "./TicTacToeModel"
+import type { TicTacToeState, BotDifficulty } from "./TicTacToeModel"
 import type { GameView } from "../../core/GameEngine"
 import { useSeasonal } from "../../contexts/SeasonalContext"
 import { AccessibilityManager } from "../../utils/AccessibilityManager"
@@ -16,13 +16,12 @@ interface TicTacToeViewProps {
   onResetScores: () => void
   onBack: () => void
   gameMode: "friend" | "bot"
+  difficulty: BotDifficulty
+  onDifficultyChange: (difficulty: BotDifficulty) => void
 }
 
-/**
- * Tic Tac Toe Game View
- *
- * Renders the Tic Tac Toe game UI
- */
+const difficultyOptions: BotDifficulty[] = ["easy", "medium", "hard"]
+
 export const TicTacToeView: React.FC<TicTacToeViewProps> & GameView = ({
   state,
   onCellPress,
@@ -30,11 +29,13 @@ export const TicTacToeView: React.FC<TicTacToeViewProps> & GameView = ({
   onResetScores,
   onBack,
   gameMode,
+  difficulty,
+  onDifficultyChange,
 }) => {
   const { seasonalTheme } = useSeasonal()
   const accessibilityManager = AccessibilityManager.getInstance()
+  const boardBackground = seasonalTheme?.backgroundColor || "rgba(187, 222, 251, 0.85)"
 
-  // References for animations
   const cellAnims = useRef(
     Array(9)
       .fill(0)
@@ -42,8 +43,9 @@ export const TicTacToeView: React.FC<TicTacToeViewProps> & GameView = ({
   )
 
   const scoreAnim = useRef(new Animated.Value(1)).current
+  const winPulseAnim = useRef(new Animated.Value(0)).current
+  const winPulseRef = useRef<Animated.CompositeAnimation | null>(null)
 
-  // Animate cells appearing
   useEffect(() => {
     cellAnims.current.forEach((anim, index) => {
       Animated.spring(anim, {
@@ -56,7 +58,6 @@ export const TicTacToeView: React.FC<TicTacToeViewProps> & GameView = ({
     })
   }, [])
 
-  // Animate score change
   useEffect(() => {
     Animated.sequence([
       Animated.timing(scoreAnim, {
@@ -70,7 +71,36 @@ export const TicTacToeView: React.FC<TicTacToeViewProps> & GameView = ({
         useNativeDriver: true,
       }),
     ]).start()
-  }, [state.scores])
+  }, [accessibilityManager, state.scores])
+
+  useEffect(() => {
+    if (state.gameOver && state.winner && state.winner !== "draw") {
+      winPulseRef.current?.stop()
+      winPulseRef.current = Animated.loop(
+        Animated.sequence([
+          Animated.timing(winPulseAnim, {
+            toValue: 1,
+            duration: accessibilityManager.getAnimationDuration(260),
+            useNativeDriver: true,
+          }),
+          Animated.timing(winPulseAnim, {
+            toValue: 0,
+            duration: accessibilityManager.getAnimationDuration(260),
+            useNativeDriver: true,
+          }),
+        ]),
+      )
+      winPulseRef.current.start()
+    } else {
+      winPulseRef.current?.stop()
+      winPulseRef.current = null
+      winPulseAnim.setValue(0)
+    }
+
+    return () => {
+      winPulseRef.current?.stop()
+    }
+  }, [accessibilityManager, state.gameOver, state.winner, winPulseAnim])
 
   const renderCell = (index: number) => {
     const isWinningCell = state.winningCells.includes(index)
@@ -80,10 +110,18 @@ export const TicTacToeView: React.FC<TicTacToeViewProps> & GameView = ({
       cellValue ? `contains ${cellValue}` : "empty"
     }${isWinningCell ? ", winning cell" : ""}`
 
+    const winningTransform = isWinningCell
+      ? [
+          {
+            scale: winPulseAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 1.08] }),
+          },
+        ]
+      : []
+
     return (
       <Animated.View
         style={{
-          transform: [{ scale: cellAnims.current[index] }],
+          transform: [{ scale: cellAnims.current[index] }, ...winningTransform],
         }}
       >
         <TouchableOpacity
@@ -136,7 +174,7 @@ export const TicTacToeView: React.FC<TicTacToeViewProps> & GameView = ({
           ]}
         >
           <Text style={[styles.playerLabel, state.currentPlayer === "O" && styles.activePlayerLabel]}>
-            {gameMode === "friend" ? "Player O" : "Bot"}
+            {gameMode === "bot" ? "Bot" : "Player O"}
           </Text>
           <Text style={[styles.scoreText, state.currentPlayer === "O" && styles.activeScoreText]}>
             {state.scores.O}
@@ -144,8 +182,28 @@ export const TicTacToeView: React.FC<TicTacToeViewProps> & GameView = ({
         </Animated.View>
       </View>
 
+      {gameMode === "bot" && (
+        <View style={styles.difficultyRow}>
+          {difficultyOptions.map((level) => {
+            const isActive = difficulty === level
+            return (
+              <TouchableOpacity
+                key={`difficulty-${level}`}
+                style={[styles.difficultyChip, isActive && styles.difficultyChipActive]}
+                onPress={() => onDifficultyChange(level)}
+              >
+                <Text style={[styles.difficultyText, isActive && styles.difficultyTextActive]}>
+                  {level.charAt(0).toUpperCase() + level.slice(1)}
+                </Text>
+              </TouchableOpacity>
+            )
+          })}
+        </View>
+      )}
+
       <View style={styles.boardContainer}>
-        <View style={styles.board}>
+        <View style={[styles.board, { backgroundColor: boardBackground }]}
+        >
           <View style={styles.row}>
             {renderCell(0)}
             {renderCell(1)}
@@ -164,41 +222,25 @@ export const TicTacToeView: React.FC<TicTacToeViewProps> & GameView = ({
         </View>
       </View>
 
-      {state.gameOver && (
+      {state.gameOver && state.winner && (
         <View style={styles.gameOverContainer}>
           <Text style={styles.gameOverText}>
-            {state.winner === "draw"
-              ? "It's a Draw!"
-              : `${state.winner === "X" ? "Player X" : gameMode === "friend" ? "Player O" : "Bot"} Wins!`}
+            {state.winner === "draw" ? "It’s a draw!" : `${state.winner} wins!`}
           </Text>
         </View>
       )}
 
       <View style={styles.footer}>
-        <TouchableOpacity
-          style={styles.resetButton}
-          onPress={onReset}
-          {...accessibilityManager.createAccessibleProps("Reset Game", "Start a new game", "button")}
-        >
-          <Ionicons name="reload" size={20} color="white" />
-          <Text style={styles.resetButtonText}>New Game</Text>
+        <TouchableOpacity style={styles.resetButton} onPress={onReset}>
+          <Ionicons name="refresh" size={18} color="white" />
+          <Text style={styles.resetButtonText}>New Round</Text>
         </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.resetScoresButton}
-          onPress={onResetScores}
-          {...accessibilityManager.createAccessibleProps("Reset Scores", "Reset the score counter", "button")}
-        >
-          <Ionicons name="refresh" size={20} color="white" />
+        <TouchableOpacity style={styles.resetScoresButton} onPress={onResetScores}>
+          <Ionicons name="trophy" size={18} color="white" />
           <Text style={styles.resetButtonText}>Reset Scores</Text>
         </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.homeButton}
-          onPress={onBack}
-          {...accessibilityManager.createAccessibleProps("Back to Menu", "Return to the main menu", "button")}
-        >
-          <Ionicons name="home" size={20} color="white" />
+        <TouchableOpacity style={styles.homeButton} onPress={onBack}>
+          <Ionicons name="home" size={18} color="white" />
           <Text style={styles.resetButtonText}>Menu</Text>
         </TouchableOpacity>
       </View>
@@ -206,51 +248,36 @@ export const TicTacToeView: React.FC<TicTacToeViewProps> & GameView = ({
   )
 }
 
-// Required method for GameView interface
-TicTacToeView.render = () => {
-  // This is handled by React's rendering system
-}
-
-// Required method for GameView interface
-TicTacToeView.update = (state: any) => {
-  // This is handled by React's props system
-}
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     alignItems: "center",
     justifyContent: "space-between",
-    padding: 20,
+    paddingVertical: 16,
   },
   playerInfo: {
     flexDirection: "row",
-    width: "100%",
-    justifyContent: "space-between",
     alignItems: "center",
-    marginVertical: 20,
+    justifyContent: "space-around",
+    width: "100%",
+    paddingHorizontal: 20,
   },
   playerCard: {
-    backgroundColor: "white",
-    padding: 15,
-    borderRadius: 15,
-    width: "40%",
+    width: 120,
+    borderRadius: 16,
+    backgroundColor: "rgba(255,255,255,0.12)",
+    paddingVertical: 12,
     alignItems: "center",
-    elevation: 5,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    overflow: "hidden",
   },
   activePlayerCard: {
     borderWidth: 2,
     borderColor: "#FFC107",
+    backgroundColor: "rgba(255,255,255,0.25)",
   },
   playerLabel: {
     fontSize: 16,
-    fontWeight: "bold",
-    color: "#444",
+    fontWeight: "600",
+    color: "#EEE",
   },
   activePlayerLabel: {
     color: "#FF6B00",
@@ -263,6 +290,30 @@ const styles = StyleSheet.create({
   },
   activeScoreText: {
     color: "#FF6B00",
+  },
+  difficultyRow: {
+    flexDirection: "row",
+    justifyContent: "center",
+    marginBottom: 12,
+  },
+  difficultyChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.3)",
+    marginHorizontal: 6,
+  },
+  difficultyChipActive: {
+    backgroundColor: "#FF6B00",
+    borderColor: "#FF6B00",
+  },
+  difficultyText: {
+    color: "rgba(255,255,255,0.75)",
+    fontWeight: "600",
+  },
+  difficultyTextActive: {
+    color: "white",
   },
   vsContainer: {
     width: 50,
@@ -281,12 +332,11 @@ const styles = StyleSheet.create({
   boardContainer: {
     alignItems: "center",
     justifyContent: "center",
-    marginVertical: 20,
+    marginVertical: 12,
   },
   board: {
     width: 300,
     height: 300,
-    backgroundColor: "rgba(187, 222, 251, 0.8)",
     borderRadius: 15,
     overflow: "hidden",
     padding: 5,
@@ -379,3 +429,5 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
 })
+
+export default TicTacToeView

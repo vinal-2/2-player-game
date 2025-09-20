@@ -18,6 +18,9 @@ import { AdProvider } from "./contexts/AdContext"
 import { GameProvider } from "./contexts/GameContext"
 import { SeasonalProvider } from "./contexts/SeasonalContext"
 import { AnalyticsProvider } from "./contexts/AnalyticsContext"
+import { initialiseGameRegistry } from "./games/registerGames"
+
+initialiseGameRegistry()
 
 const Stack = createNativeStackNavigator()
 
@@ -63,3 +66,4 @@ export default function App() {
     </GestureHandlerRootView>
   )
 }
+

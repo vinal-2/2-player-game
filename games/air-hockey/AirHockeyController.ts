@@ -1,93 +1,102 @@
+import { PanResponder, type PanResponderGestureState } from "react-native"
+
 import type { GameController } from "../../core/GameEngine"
 import type { AirHockeyModel } from "./AirHockeyModel"
-import { InputManager } from "../../utils/InputManager"
 
-/**
- * Air Hockey Game Controller
- *
- * Handles user input and updates the game model
- */
+export type AirHockeyDifficulty = "rookie" | "pro" | "legend"
+
+const BOT_DIFFICULTY_MAP: Record<AirHockeyDifficulty, number> = {
+  rookie: 0.35,
+  pro: 0.6,
+  legend: 0.85,
+}
+
 export class AirHockeyController implements GameController {
   private model: AirHockeyModel
-  private inputManager: InputManager
   private gameMode: "friend" | "bot"
-  private botDifficulty = 0.5 // 0 to 1, where 1 is hardest
+  private botDifficulty: AirHockeyDifficulty = "pro"
+
+  private player1Start = { x: 0, y: 0 }
+  private player2Start = { x: 0, y: 0 }
+
+  public readonly player1PanHandlers: any
+  public readonly player2PanHandlers: any
 
   constructor(model: AirHockeyModel, gameMode: "friend" | "bot") {
     this.model = model
     this.gameMode = gameMode
-    this.inputManager = InputManager.getInstance()
+
+    const player1Responder = PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onPanResponderGrant: () => {
+        this.player1Start.x = this.model.state.player1Paddle.x
+        this.player1Start.y = this.model.state.player1Paddle.y
+      },
+      onPanResponderMove: (_, gestureState) => {
+        this.handlePlayer1Pan(gestureState)
+      },
+      onPanResponderRelease: () => {
+        this.player1Start.x = this.model.state.player1Paddle.x
+        this.player1Start.y = this.model.state.player1Paddle.y
+      },
+    })
+
+    const player2Responder = PanResponder.create({
+      onStartShouldSetPanResponder: () => this.gameMode === "friend",
+      onPanResponderGrant: () => {
+        this.player2Start.x = this.model.state.player2Paddle.x
+        this.player2Start.y = this.model.state.player2Paddle.y
+      },
+      onPanResponderMove: (_, gestureState) => {
+        if (this.gameMode === "friend") {
+          this.handlePlayer2Pan(gestureState)
+        }
+      },
+      onPanResponderRelease: () => {
+        this.player2Start.x = this.model.state.player2Paddle.x
+        this.player2Start.y = this.model.state.player2Paddle.y
+      },
+    })
+
+    this.player1PanHandlers = player1Responder.panHandlers
+    this.player2PanHandlers = player2Responder.panHandlers
   }
 
-  /**
-   * Initializes the controller
-   */
   public initialize(): void {
-    // Register input handlers
-    this.inputManager.registerPanListener("player1Paddle", this.handlePlayer1Input)
-
-    if (this.gameMode === "friend") {
-      this.inputManager.registerPanListener("player2Paddle", this.handlePlayer2Input)
-    }
+    // nothing additional
   }
 
-  /**
-   * Updates the controller
-   */
   public update(deltaTime: number): void {
-    // Update bot if in bot mode
     if (this.gameMode === "bot" && this.model.state.gameActive) {
-      this.model.updateBotPaddle(this.botDifficulty)
+      this.model.updateBotPaddle(BOT_DIFFICULTY_MAP[this.botDifficulty])
     }
   }
 
-  /**
-   * Handles input for player 1
-   */
-  private handlePlayer1Input = (gestureState: any): void => {
+  private handlePlayer1Pan(gestureState: PanResponderGestureState): void {
     if (!this.model.state.gameActive) return
 
-    const { player1Paddle } = this.model.state
-    const newX = player1Paddle.x + gestureState.dx
-    const newY = player1Paddle.y + gestureState.dy
-
-    this.model.movePlayer1Paddle(newX, newY)
+    const targetX = this.player1Start.x + gestureState.dx
+    const targetY = this.player1Start.y + gestureState.dy
+    this.model.movePlayer1Paddle(targetX, targetY)
   }
 
-  /**
-   * Handles input for player 2
-   */
-  private handlePlayer2Input = (gestureState: any): void => {
+  private handlePlayer2Pan(gestureState: PanResponderGestureState): void {
     if (!this.model.state.gameActive || this.gameMode !== "friend") return
 
-    const { player2Paddle } = this.model.state
-    const newX = player2Paddle.x + gestureState.dx
-    const newY = player2Paddle.y + gestureState.dy
-
-    this.model.movePlayer2Paddle(newX, newY)
+    const targetX = this.player2Start.x + gestureState.dx
+    const targetY = this.player2Start.y + gestureState.dy
+    this.model.movePlayer2Paddle(targetX, targetY)
   }
 
-  /**
-   * Sets the bot difficulty
-   */
-  public setBotDifficulty(difficulty: number): void {
-    // Clamp between 0 and 1
-    this.botDifficulty = Math.max(0, Math.min(difficulty, 1))
+  public setBotDifficulty(level: AirHockeyDifficulty): void {
+    this.botDifficulty = level
   }
 
-  /**
-   * Handles any input
-   */
-  public handleInput(input: any): void {
-    // This method is required by the interface but not used directly
-    // Input is handled by the registered listeners
+  public handleInput(): void {
+    // handled via pan responders
   }
 
-  /**
-   * Cleans up the controller
-   */
   public cleanup(): void {
-    this.inputManager.removePanListener("player1Paddle")
-    this.inputManager.removePanListener("player2Paddle")
+    // nothing to clean for PanResponder
   }
 }

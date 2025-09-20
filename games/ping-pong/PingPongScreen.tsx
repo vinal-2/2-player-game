@@ -1,6 +1,7 @@
 "use client"
 
-import { useState, useEffect, useRef, useContext } from "react"
+import type React from "react"
+import { useEffect, useRef, useState } from "react"
 import {
   View,
   Text,
@@ -10,88 +11,243 @@ import {
   PanResponder,
   Animated,
   ImageBackground,
-  Alert,
 } from "react-native"
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView } from "react-native-safe-area-context"
 import { Ionicons } from "@expo/vector-icons"
-import SoundContext from "../contexts/SoundContext"
-import ConfettiCannon from "react-native-confetti-cannon"
+
+import type { GameRuntimeProps } from "../../core/gameRuntime"
+import { useSound } from "../../contexts/SoundContext"
+import { useAnalytics } from "../../contexts/AnalyticsContext"
 
 const { width, height } = Dimensions.get("window")
 const BOARD_WIDTH = width * 0.95
 const BOARD_HEIGHT = height * 0.6
-const PADDLE_WIDTH = 100
+const PADDLE_WIDTH = BOARD_WIDTH * 0.28
 const PADDLE_HEIGHT = 20
-const BALL_SIZE = 15
+const BALL_SIZE = 16
+const MAX_SCORE = 11
 
+const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(value, max))
+const easeTowards = (current: number, target: number, factor: number) => current + (target - current) * factor
 
+const PingPongScreen: React.FC<GameRuntimeProps> = ({ gameId, mode, onExit, onEvent }) => {
+  const { playSound } = useSound()
+  const { trackEvent } = useAnalytics()
 
-const PingPongScreen = ({ route, navigation }) => {
-  const { mode } = route.params
   const [scores, setScores] = useState({ player1: 0, player2: 0 })
   const [gameActive, setGameActive] = useState(true)
-  const { playSound } = useContext(SoundContext)
-  const confettiRef = useRef(null)
+  const [rallyCount, setRallyCount] = useState(0)
+  const [winnerBanner, setWinnerBanner] = useState<string | null>(null)
 
-  const ballPosition = useRef(
-    new Animated.ValueXY({
-      x: BOARD_WIDTH / 2 - BALL_SIZE / 2,
-      y: BOARD_HEIGHT / 2 - BALL_SIZE / 2,
-    }),
-  ).current
+  useEffect(() => {
+    const loadScores = async () => {
+      try {
+        const stored = await AsyncStorage.getItem(`ping-pong-scores-${gameId}`)
+        if (stored) {
+          const parsed = JSON.parse(stored) as { player1: number; player2: number }
+          if (parsed && typeof parsed.player1 === "number" && typeof parsed.player2 === "number") {
+            setScores(parsed)
+          }
+        }
+      } catch (error) {
+        // ignore load errors
+      }
+    }
+    loadScores()
+  }, [gameId])
 
-  const ballVelocity = useRef({ x: 3, y: 5 })
+  const player1Position = useRef(new Animated.ValueXY({ x: BOARD_WIDTH / 2 - PADDLE_WIDTH / 2, y: BOARD_HEIGHT - 40 })).current
+  const player2Position = useRef(new Animated.ValueXY({ x: BOARD_WIDTH / 2 - PADDLE_WIDTH / 2, y: 20 })).current
+  const ballPosition = useRef(new Animated.ValueXY({ x: BOARD_WIDTH / 2 - BALL_SIZE / 2, y: BOARD_HEIGHT / 2 - BALL_SIZE / 2 })).current
 
-  const player1Position = useRef(
-    new Animated.ValueXY({
-      x: BOARD_WIDTH / 2 - PADDLE_WIDTH / 2,
-      y: BOARD_HEIGHT - PADDLE_HEIGHT * 1.5,
-    }),
-  ).current
+  const ballVelocity = useRef({ vx: 0, vy: 0 })
+  const player1StartX = useRef(BOARD_WIDTH / 2 - PADDLE_WIDTH / 2)
+  const player2StartX = useRef(BOARD_WIDTH / 2 - PADDLE_WIDTH / 2)
+  const player1Velocity = useRef(0)
+  const player2Velocity = useRef(0)
+  const spinRef = useRef(0)
+  const lastHitRef = useRef<"player1" | "player2" | null>(null)
 
-  const player2Position = useRef(
-    new Animated.ValueXY({
-      x: BOARD_WIDTH / 2 - PADDLE_WIDTH / 2,
-      y: PADDLE_HEIGHT / 2,
-    }),
-  ).current
-
-  const animationRef = useRef(null)
+  const animationRef = useRef<number | null>(null)
   const lastUpdateTime = useRef(Date.now())
 
-  // Setup pan responder for player 1 paddle
+  const startGame = () => {
+    setWinnerBanner(null)
+    setGameActive(true)
+    resetBall()
+    lastUpdateTime.current = Date.now()
+    gameLoop()
+  }
+
+  const resetBall = (towardsPlayer: "player1" | "player2" | null = null) => {
+    ballPosition.setValue({ x: BOARD_WIDTH / 2 - BALL_SIZE / 2, y: BOARD_HEIGHT / 2 - BALL_SIZE / 2 })
+    const angle = Math.random() * Math.PI * 0.6 - Math.PI * 0.3
+    const baseSpeed = 5.5
+    const dir = towardsPlayer === "player1" ? 1 : towardsPlayer === "player2" ? -1 : Math.random() < 0.5 ? 1 : -1
+    ballVelocity.current = {
+      vx: Math.cos(angle) * baseSpeed,
+      vy: Math.sin(angle) * baseSpeed * dir,
+    }
+    spinRef.current = 0
+    lastHitRef.current = null
+  }
+
   const player1PanResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: () => true,
-      onPanResponderMove: (evt, gestureState) => {
-        let newX = player1Position.x._value + gestureState.dx
-        newX = Math.max(0, Math.min(newX, BOARD_WIDTH - PADDLE_WIDTH))
+      onPanResponderGrant: () => {
+        player1StartX.current = player1Position.x._value
+      },
+      onPanResponderMove: (_, gestureState) => {
+        const newX = clamp(player1StartX.current + gestureState.dx, 0, BOARD_WIDTH - PADDLE_WIDTH)
+        player1Velocity.current = newX - player1Position.x._value
         player1Position.setValue({ x: newX, y: player1Position.y._value })
       },
-    }),
-  ).current
-
-  // Setup pan responder for player 2 paddle (when in friend mode)
-  const player2PanResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: () => true,
-      onPanResponderMove: (evt, gestureState) => {
-        if (mode === "bot") return
-
-        let newX = player2Position.x._value + gestureState.dx
-        newX = Math.max(0, Math.min(newX, BOARD_WIDTH - PADDLE_WIDTH))
-        player2Position.setValue({ x: newX, y: player2Position.y._value })
+      onPanResponderRelease: () => {
+        player1Velocity.current = 0
       },
     }),
   ).current
 
-  // Game loop
-  useEffect(() => {
-    playSound(require("../assets/sounds/game-start.mp3"))
-    startGame()
+  const player2PanResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => mode === "friend",
+      onPanResponderGrant: () => {
+        player2StartX.current = player2Position.x._value
+      },
+      onPanResponderMove: (_, gestureState) => {
+        if (mode === "bot") {
+          return
+        }
+        const newX = clamp(player2StartX.current + gestureState.dx, 0, BOARD_WIDTH - PADDLE_WIDTH)
+        player2Velocity.current = newX - player2Position.x._value
+        player2Position.setValue({ x: newX, y: player2Position.y._value })
+      },
+      onPanResponderRelease: () => {
+        player2Velocity.current = 0
+      },
+    }),
+  ).current
 
+  const botUpdate = (dt: number) => {
+    if (mode !== "bot") return
+
+    const targetX = ballPosition.x._value + BALL_SIZE / 2
+    const easeFactor = 0.12 + Math.min(Math.abs(ballVelocity.current.vy) / 10, 0.18)
+    const newX = clamp(easeTowards(player2Position.x._value, targetX - PADDLE_WIDTH / 2, easeFactor * dt * 60), 0, BOARD_WIDTH - PADDLE_WIDTH)
+    player2Velocity.current = newX - player2Position.x._value
+    player2Position.setValue({ x: newX, y: player2Position.y._value })
+  }
+
+  const gameLoop = () => {
+    if (!gameActive) return
+
+    const now = Date.now()
+    const delta = (now - lastUpdateTime.current) / 16.6667
+    lastUpdateTime.current = now
+
+    botUpdate(delta)
+
+    let newX = ballPosition.x._value + ballVelocity.current.vx * delta
+    let newY = ballPosition.y._value + ballVelocity.current.vy * delta
+
+    if (newX <= 0) {
+      newX = 0
+      ballVelocity.current.vx = Math.abs(ballVelocity.current.vx) * 0.98
+    } else if (newX + BALL_SIZE >= BOARD_WIDTH) {
+      newX = BOARD_WIDTH - BALL_SIZE
+      ballVelocity.current.vx = -Math.abs(ballVelocity.current.vx) * 0.98
+    }
+
+    const paddle1Y = player1Position.y._value
+    const paddle2Y = player2Position.y._value
+
+    if (newY + BALL_SIZE >= paddle1Y) {
+      const paddleX = player1Position.x._value
+      if (newX + BALL_SIZE >= paddleX && newX <= paddleX + PADDLE_WIDTH) {
+        handlePaddleBounce("player1", paddleX, paddle1Y, newX)
+        newY = BOARD_HEIGHT - BALL_SIZE - 2
+      } else {
+        handleScore("player2")
+        return
+      }
+    } else if (newY <= paddle2Y + PADDLE_HEIGHT) {
+      const paddleX = player2Position.x._value
+      if (newX + BALL_SIZE >= paddleX && newX <= paddleX + PADDLE_WIDTH) {
+        handlePaddleBounce("player2", paddleX, paddle2Y, newX)
+        newY = paddle2Y + PADDLE_HEIGHT + 2
+      } else {
+        handleScore("player1")
+        return
+      }
+    }
+
+    ballVelocity.current.vx += spinRef.current * 0.02
+    spinRef.current *= 0.96
+
+    ballVelocity.current.vx = clamp(ballVelocity.current.vx, -9.5, 9.5)
+    ballVelocity.current.vy = clamp(ballVelocity.current.vy, -12, 12)
+
+    ballPosition.setValue({ x: newX, y: newY })
+
+    animationRef.current = requestAnimationFrame(gameLoop)
+  }
+
+  const handlePaddleBounce = (paddle: "player1" | "player2", paddleX: number, paddleY: number, nextBallX: number) => {
+    const velocity = paddle === "player1" ? player1Velocity.current : player2Velocity.current
+    const offset = nextBallX + BALL_SIZE / 2 - (paddleX + PADDLE_WIDTH / 2)
+    const normalizedOffset = clamp(offset / (PADDLE_WIDTH / 2), -1, 1)
+    const vertical = Math.abs(ballVelocity.current.vy) + 0.6
+
+    ballVelocity.current.vy = (paddle === "player1" ? -vertical : vertical)
+    ballVelocity.current.vx = clamp(ballVelocity.current.vx + normalizedOffset * 4 + velocity * 0.4, -10, 10)
+    spinRef.current = clamp(normalizedOffset + velocity * 0.2, -1.5, 1.5)
+
+    const nextRally = lastHitRef.current && lastHitRef.current !== paddle ? rallyCount + 1 : 1
+    lastHitRef.current = paddle
+    setRallyCount(nextRally)
+
+    if (nextRally === 6 || nextRally === 10) {
+      playSound("round-start")
+      trackEvent("ping_pong_rally_milestone", { game: gameId, rally: nextRally })
+    } else {
+      playSound("paddle-hit")
+    }
+
+    onEvent?.({ type: "custom", payload: { action: "rally", count: nextRally } })
+  }
+
+  const handleScore = (scorer: "player1" | "player2") => {
+    setGameActive(false)
+    playSound("score")
+
+    const nextScore = scores[scorer] + 1
+    const updatedScores = { ...scores, [scorer]: nextScore }
+    setScores(updatedScores)
+    AsyncStorage.setItem(`ping-pong-scores-${gameId}`, JSON.stringify(updatedScores)).catch(() => undefined)
+
+    setRallyCount(0)
+    trackEvent("ping_pong_score", { game: gameId, scorer, score: nextScore })
+    onEvent?.({ type: "score", payload: { scorer, score: nextScore } })
+
+    const opponent = scorer === "player1" ? "player2" : "player1"
+    resetBall(opponent)
+
+    setTimeout(() => {
+      if (nextScore >= MAX_SCORE) {
+        const winnerLabel = scorer === "player1" ? "Player 1" : mode === "bot" ? "Bot" : "Player 2"
+        setWinnerBanner(`${winnerLabel} wins the match!`)
+        trackEvent("ping_pong_match", { game: gameId, winner: scorer })
+        onEvent?.({ type: "game_over", payload: { winner: scorer } })
+      } else {
+        setGameActive(true)
+        gameLoop()
+      }
+    }, 700)
+  }
+
+  useEffect(() => {
+    startGame()
     return () => {
       if (animationRef.current) {
         cancelAnimationFrame(animationRef.current)
@@ -99,218 +255,91 @@ const PingPongScreen = ({ route, navigation }) => {
     }
   }, [])
 
-  const startGame = () => {
-    setGameActive(true)
-    resetBall()
-    gameLoop()
-  }
-
-  const resetBall = () => {
-    ballPosition.setValue({
-      x: BOARD_WIDTH / 2 - BALL_SIZE / 2,
-      y: BOARD_HEIGHT / 2 - BALL_SIZE / 2,
-    })
-
-    // Add random initial velocity
-    const angle = (Math.random() * Math.PI) / 2 - Math.PI / 4 // -45 to 45 degrees
-    const speed = 5
-    ballVelocity.current = {
-      x: Math.cos(angle) * speed * (Math.random() > 0.5 ? 1 : -1),
-      y: Math.sin(angle) * speed * (Math.random() > 0.5 ? 1 : -1),
-    }
-  }
-
-  const gameLoop = () => {
-    if (!gameActive) return
-
-    const now = Date.now()
-    const deltaTime = now - lastUpdateTime.current
-    lastUpdateTime.current = now
-
-    // Limit to 60fps equivalent
-    if (deltaTime < 16) {
-      animationRef.current = requestAnimationFrame(gameLoop)
-      return
-    }
-
-    // Update ball position based on velocity
-    let newX = ballPosition.x._value + ballVelocity.current.x
-    let newY = ballPosition.y._value + ballVelocity.current.y
-
-    // Wall collisions (left and right)
-    if (newX <= 0 || newX >= BOARD_WIDTH - BALL_SIZE) {
-      ballVelocity.current.x *= -1
-      newX = newX <= 0 ? 0 : BOARD_WIDTH - BALL_SIZE
-      playSound(require("../assets/sounds/wall-hit.mp3"))
-    }
-
-    // Top and bottom collisions (scoring)
-    if (newY <= 0) {
-      // Check if it hits player 2's paddle
-      const paddleX = player2Position.x._value
-      if (newX + BALL_SIZE >= paddleX && newX <= paddleX + PADDLE_WIDTH) {
-        // Bounce off paddle
-        ballVelocity.current.y *= -1
-        newY = 0
-
-        // Adjust x velocity based on where ball hit the paddle
-        const hitPosition = newX + BALL_SIZE / 2 - (paddleX + PADDLE_WIDTH / 2)
-        ballVelocity.current.x = hitPosition * 0.2
-
-        playSound(require("../assets/sounds/paddle-hit.mp3"))
-      } else {
-        // Player 1 scored
-        handleScore("player1")
-        return
-      }
-    } else if (newY >= BOARD_HEIGHT - BALL_SIZE) {
-      // Check if it hits player 1's paddle
-      const paddleX = player1Position.x._value
-      if (newX + BALL_SIZE >= paddleX && newX <= paddleX + PADDLE_WIDTH) {
-        // Bounce off paddle
-        ballVelocity.current.y *= -1
-        newY = BOARD_HEIGHT - BALL_SIZE
-
-        // Adjust x velocity based on where ball hit the paddle
-        const hitPosition = newX + BALL_SIZE / 2 - (paddleX + PADDLE_WIDTH / 2)
-        ballVelocity.current.x = hitPosition * 0.2
-
-        playSound(require("../assets/sounds/paddle-hit.mp3"))
-      } else {
-        // Player 2 scored
-        handleScore("player2")
-        return
-      }
-    }
-
-    // Move ball
-    ballPosition.setValue({ x: newX, y: newY })
-
-    // Simple bot AI
-    if (mode === "bot") {
-      updateBotPaddle()
-    }
-
-    animationRef.current = requestAnimationFrame(gameLoop)
-  }
-
-  const updateBotPaddle = () => {
-    // Bot difficulty - adjust these values to make the bot easier or harder
-    const reactionSpeed = 0.1 // Higher = faster reaction (0-1)
-    const accuracy = 0.8 // Higher = more accurate (0-1)
-
-    // Predict where the ball will be
-    if (ballVelocity.current.y < 0) {
-      // Ball is moving toward bot
-      const botX = player2Position.x._value
-      const ballX = ballPosition.x._value
-
-      // Add some randomness to make the bot imperfect
-      const targetX = ballX - PADDLE_WIDTH / 2 + Math.random() * PADDLE_WIDTH * (1 - accuracy)
-
-      // Move toward the predicted position
-      const newX = botX + (targetX - botX) * reactionSpeed
-      const limitedX = Math.max(0, Math.min(newX, BOARD_WIDTH - PADDLE_WIDTH))
-
-      player2Position.setValue({
-        x: limitedX,
-        y: player2Position.y._value,
-      })
-    }
-  }
-
-  const handleScore = (scorer) => {
-    setGameActive(false)
-    playSound(require("../assets/sounds/score.mp3"))
-
-    // Update scores
-    setScores((prev) => ({
-      ...prev,
-      [scorer]: prev[scorer] + 1,
-    }))
-
-    // Check if game is over
-    if (scores[scorer] + 1 >= 5) {
-      playSound(require("../assets/sounds/win.mp3"))
-      if (confettiRef.current) {
-        confettiRef.current.start()
-      }
-
-      const winner = scorer === "player1" ? "Player 1" : mode === "friend" ? "Player 2" : "Bot"
-      setTimeout(() => {
-        Alert.alert("Game Over", `${winner} wins the game!`, [{ text: "New Game", onPress: resetGame }], {
-          cancelable: false,
-        })
-      }, 1000)
-    } else {
-      // Continue after score
-      setTimeout(() => {
-        resetBall()
-        setGameActive(true)
-        gameLoop()
-      }, 1000)
-    }
-  }
-
-  const resetGame = () => {
+  const handleReset = () => {
     setScores({ player1: 0, player2: 0 })
-    resetBall()
+    setRallyCount(0)
     setGameActive(true)
-    playSound(require("../assets/sounds/game-start.mp3"))
-    gameLoop()
+    resetBall()
+    trackEvent("ping_pong_reset", { game: gameId })
+    startGame()
+  }
+
+  const handleBack = () => {
+    playSound("button-press")
+    onExit()
   }
 
   return (
-    <ImageBackground source={require("../assets/images/ping-pong-bg.png")} style={styles.backgroundImage}>
-      <SafeAreaView style={styles.container}>
-        <ConfettiCannon ref={confettiRef} count={100} origin={{ x: width / 2, y: 0 }} autoStart={false} fadeOut />
-
-        <View style={styles.scoreBoard}>
-          <View style={styles.scoreContainer}>
+    <ImageBackground source={require("../../assets/images/ping-pong-bg.png")} style={styles.background}>
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.scoreRow}>
+          <View style={styles.scoreCapsule}>
             <Text style={styles.scoreLabel}>Player 1</Text>
             <Text style={styles.scoreValue}>{scores.player1}</Text>
           </View>
-          <View style={styles.scoreContainer}>
-            <Text style={styles.scoreLabel}>{mode === "friend" ? "Player 2" : "Bot"}</Text>
+          <View style={styles.rallyBadge}>
+            <Ionicons name="flash" size={16} color="white" />
+            <Text style={styles.rallyText}>{rallyCount} Rally</Text>
+          </View>
+          <View style={styles.scoreCapsule}>
+            <Text style={styles.scoreLabel}>{mode === "bot" ? "Bot" : "Player 2"}</Text>
             <Text style={styles.scoreValue}>{scores.player2}</Text>
           </View>
         </View>
 
-        <View style={styles.board}>
-          {/* Center line */}
-          <View style={styles.centerLine} />
+        <View style={styles.boardContainer}>
+          <View style={styles.board}>
+            <View style={styles.net} />
 
-          {/* Player 2 paddle (top) */}
-          <Animated.View
-            style={[styles.paddle, styles.player2Paddle, { transform: player2Position.getTranslateTransform() }]}
-            {...player2PanResponder.panHandlers}
-          />
+            <Animated.View
+              style={[
+                styles.paddle,
+                styles.player2Paddle,
+                {
+                  transform: player2Position.getTranslateTransform(),
+                  width: PADDLE_WIDTH,
+                  height: PADDLE_HEIGHT,
+                },
+              ]}
+              {...player2PanResponder.panHandlers}
+            />
 
-          {/* Player 1 paddle (bottom) */}
-          <Animated.View
-            style={[styles.paddle, styles.player1Paddle, { transform: player1Position.getTranslateTransform() }]}
-            {...player1PanResponder.panHandlers}
-          />
+            <Animated.View
+              style={[
+                styles.paddle,
+                styles.player1Paddle,
+                {
+                  transform: player1Position.getTranslateTransform(),
+                  width: PADDLE_WIDTH,
+                  height: PADDLE_HEIGHT,
+                },
+              ]}
+              {...player1PanResponder.panHandlers}
+            />
 
-          {/* Ball */}
-          <Animated.View style={[styles.ball, { transform: ballPosition.getTranslateTransform() }]} />
+            <Animated.View
+              style={[
+                styles.ball,
+                { transform: ballPosition.getTranslateTransform(), width: BALL_SIZE, height: BALL_SIZE },
+              ]}
+            />
+          </View>
         </View>
 
-        <View style={styles.footer}>
-          <TouchableOpacity style={styles.resetButton} onPress={resetGame}>
-            <Ionicons name="reload" size={20} color="white" />
-            <Text style={styles.buttonText}>Reset Game</Text>
-          </TouchableOpacity>
+        {winnerBanner && (
+          <View style={styles.banner}>
+            <Text style={styles.bannerText}>{winnerBanner}</Text>
+          </View>
+        )}
 
-          <TouchableOpacity
-            style={styles.homeButton}
-            onPress={() => {
-              playSound(require("../assets/sounds/button-press.mp3"))
-              navigation.goBack()
-            }}
-          >
-            <Ionicons name="home" size={20} color="white" />
-            <Text style={styles.buttonText}>Back to Menu</Text>
+        <View style={styles.footer}>
+          <TouchableOpacity style={styles.footerButton} onPress={handleReset}>
+            <Ionicons name="reload" size={18} color="white" />
+            <Text style={styles.footerButtonText}>New Match</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.footerButton} onPress={handleBack}>
+            <Ionicons name="home" size={18} color="white" />
+            <Text style={styles.footerButtonText}>Menu</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -319,117 +348,120 @@ const PingPongScreen = ({ route, navigation }) => {
 }
 
 const styles = StyleSheet.create({
-  backgroundImage: {
+  background: {
     flex: 1,
     width: "100%",
-    height: "100%",
   },
-  container: {
+  safeArea: {
     flex: 1,
+    justifyContent: "space-between",
+    paddingVertical: 16,
+  },
+  scoreRow: {
+    flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    padding: 10,
+    paddingHorizontal: 24,
   },
-  scoreBoard: {
-    flexDirection: "row",
-    width: "100%",
-    justifyContent: "space-around",
-    padding: 15,
-  },
-  scoreContainer: {
-    alignItems: "center",
-    backgroundColor: "rgba(255, 255, 255, 0.8)",
+  scoreCapsule: {
+    paddingHorizontal: 18,
     paddingVertical: 10,
-    paddingHorizontal: 20,
-    borderRadius: 15,
-    elevation: 3,
+    borderRadius: 18,
+    backgroundColor: "rgba(15, 23, 42, 0.7)",
   },
   scoreLabel: {
-    fontSize: 16,
-    fontWeight: "bold",
-    color: "#555",
+    color: "rgba(255,255,255,0.7)",
+    fontSize: 13,
   },
   scoreValue: {
-    fontSize: 28,
-    fontWeight: "bold",
-    color: "#FF6B00",
+    color: "white",
+    fontSize: 24,
+    fontWeight: "700",
+  },
+  rallyBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(163, 230, 53, 0.8)",
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 16,
+  },
+  rallyText: {
+    marginLeft: 6,
+    color: "white",
+    fontWeight: "700",
+  },
+  boardContainer: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
   },
   board: {
     width: BOARD_WIDTH,
     height: BOARD_HEIGHT,
-    backgroundColor: "rgba(33, 150, 243, 0.8)",
+    backgroundColor: "rgba(15, 118, 110, 0.85)",
     borderRadius: 20,
     overflow: "hidden",
-    position: "relative",
-    elevation: 8,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 5,
+    borderWidth: 4,
+    borderColor: "rgba(255,255,255,0.2)",
   },
-  centerLine: {
+  net: {
     position: "absolute",
     top: BOARD_HEIGHT / 2 - 2,
-    width: BOARD_WIDTH,
+    left: 0,
+    right: 0,
     height: 4,
-    backgroundColor: "white",
-    opacity: 0.4,
+    backgroundColor: "rgba(255,255,255,0.7)",
   },
   paddle: {
-    width: PADDLE_WIDTH,
-    height: PADDLE_HEIGHT,
-    borderRadius: 10,
     position: "absolute",
+    borderRadius: 12,
   },
   player1Paddle: {
-    backgroundColor: "#FF5252",
-    bottom: 10,
+    bottom: 24,
+    backgroundColor: "#f97316",
   },
   player2Paddle: {
-    backgroundColor: "#4CAF50",
-    top: 10,
+    top: 24,
+    backgroundColor: "#38bdf8",
   },
   ball: {
-    width: BALL_SIZE,
-    height: BALL_SIZE,
-    borderRadius: BALL_SIZE / 2,
-    backgroundColor: "#FFC107",
     position: "absolute",
-    elevation: 5,
+    backgroundColor: "white",
+    borderRadius: BALL_SIZE / 2,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.3,
     shadowRadius: 2,
   },
+  banner: {
+    marginHorizontal: 24,
+    backgroundColor: "rgba(15,23,42,0.85)",
+    borderRadius: 18,
+    paddingVertical: 14,
+    alignItems: "center",
+  },
+  bannerText: {
+    color: "white",
+    fontWeight: "700",
+    fontSize: 16,
+  },
   footer: {
     flexDirection: "row",
-    justifyContent: "space-around",
-    width: "100%",
-    padding: 15,
+    justifyContent: "space-between",
+    paddingHorizontal: 24,
   },
-  resetButton: {
-    backgroundColor: "#FF5252",
+  footerButton: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 10,
-    elevation: 3,
+    backgroundColor: "rgba(15, 23, 42, 0.85)",
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderRadius: 16,
   },
-  homeButton: {
-    backgroundColor: "#4CAF50",
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 10,
-    elevation: 3,
-  },
-  buttonText: {
+  footerButtonText: {
     color: "white",
-    fontWeight: "bold",
+    fontWeight: "700",
     marginLeft: 8,
   },
 })

@@ -1,7 +1,6 @@
 import type { GameModel } from "../../core/GameEngine"
 import { CollisionDetection } from "../../utils/CollisionDetection"
 
-// Define the game state types
 export interface Paddle {
   x: number
   y: number
@@ -39,18 +38,30 @@ export interface AirHockeyState {
   winner: string | null
 }
 
+const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value))
+
+const MAX_GOALS = 5
+const GOAL_RESET_DELAY = 900
+const PUCK_SPEED_MIN = 2.6
+const PUCK_SPEED_MAX = 14
+const WALL_DAMPING = 0.96
+
 /**
- * Air Hockey Game Model
- *
- * Handles the game state and logic for the Air Hockey game
+ * Air Hockey Game Model with improved physics and AI support
  */
 export class AirHockeyModel implements GameModel {
   public isActive = false
   public state: AirHockeyState
-  private friction = 0.98
-  private maxScore = 5
+
+  private friction = 0.995
+  private paddleVelocity = {
+    player1: { vx: 0, vy: 0 },
+    player2: { vx: 0, vy: 0 },
+  }
+
   private onGoalScored: (player: string) => void = () => {}
   private onGameOver: (winner: string) => void = () => {}
+  private onStateChange: () => void = () => {}
 
   constructor(boardWidth: number, boardHeight: number) {
     const paddleRadius = boardWidth * 0.05
@@ -79,15 +90,15 @@ export class AirHockeyModel implements GameModel {
       },
       player1Goal: {
         x: (boardWidth - goalWidth) / 2,
-        y: boardHeight - 10,
+        y: boardHeight - 12,
         width: goalWidth,
-        height: 20,
+        height: 24,
       },
       player2Goal: {
         x: (boardWidth - goalWidth) / 2,
-        y: -10,
+        y: -12,
         width: goalWidth,
-        height: 20,
+        height: 24,
       },
       scores: {
         player1: 0,
@@ -98,133 +109,152 @@ export class AirHockeyModel implements GameModel {
     }
   }
 
-  /**
-   * Sets the callback for when a goal is scored
-   */
   public setOnGoalScored(callback: (player: string) => void): void {
     this.onGoalScored = callback
   }
 
-  /**
-   * Sets the callback for when the game is over
-   */
   public setOnGameOver(callback: (winner: string) => void): void {
     this.onGameOver = callback
   }
 
-  /**
-   * Initializes the game
-   */
+  public setOnStateChange(callback: () => void): void {
+    this.onStateChange = callback
+  }
+
   public initialize(): void {
     this.resetPuck()
     this.state.gameActive = true
     this.isActive = true
   }
 
-  /**
-   * Updates the game state
-   */
   public update(deltaTime: number): void {
     if (!this.state.gameActive) return
 
-    // Apply friction
-    this.state.puck.vx *= this.friction
-    this.state.puck.vy *= this.friction
+    const dt = clamp(deltaTime, 0.001, 0.05)
+    const frameScale = dt * 60
+    const damping = Math.pow(this.friction, frameScale)
 
-    // Update puck position
-    this.state.puck.x += this.state.puck.vx
-    this.state.puck.y += this.state.puck.vy
+    const { puck } = this.state
 
-    // Check for wall collisions
+    puck.vx *= damping
+    puck.vy *= damping
+
+    if (Math.abs(puck.vx) < 0.01) puck.vx = 0
+    if (Math.abs(puck.vy) < 0.01) puck.vy = 0
+
+    puck.x += puck.vx * frameScale
+    puck.y += puck.vy * frameScale
+
     this.handleWallCollisions()
-
-    // Check for paddle collisions
     this.handlePaddleCollisions()
-
-    // Check for goals
     this.checkForGoals()
+
+    this.decayPaddleVelocity()
+    this.onStateChange()
   }
 
-  /**
-   * Handles wall collisions
-   */
-  private handleWallCollisions(): void {
-    const { puck, boardWidth } = this.state
+  private decayPaddleVelocity(): void {
+    this.paddleVelocity.player1.vx *= 0.6
+    this.paddleVelocity.player1.vy *= 0.6
+    this.paddleVelocity.player2.vx *= 0.6
+    this.paddleVelocity.player2.vy *= 0.6
+  }
 
-    // Left and right walls
+  private handleWallCollisions(): void {
+    const { puck, boardWidth, boardHeight } = this.state
+
     if (puck.x - puck.radius <= 0) {
       puck.x = puck.radius
-      puck.vx = -puck.vx
+      puck.vx = Math.abs(puck.vx) * WALL_DAMPING
     } else if (puck.x + puck.radius >= boardWidth) {
       puck.x = boardWidth - puck.radius
-      puck.vx = -puck.vx
+      puck.vx = -Math.abs(puck.vx) * WALL_DAMPING
+    }
+
+    if (puck.y - puck.radius <= 0) {
+      puck.y = puck.radius
+      puck.vy = Math.abs(puck.vy) * WALL_DAMPING
+    } else if (puck.y + puck.radius >= boardHeight) {
+      puck.y = boardHeight - puck.radius
+      puck.vy = -Math.abs(puck.vy) * WALL_DAMPING
     }
   }
 
-  /**
-   * Handles paddle collisions
-   */
   private handlePaddleCollisions(): void {
     const { puck, player1Paddle, player2Paddle } = this.state
 
-    // Check collision with player 1 paddle
     if (
       CollisionDetection.circleCollision(
         { x: puck.x, y: puck.y, radius: puck.radius },
         { x: player1Paddle.x, y: player1Paddle.y, radius: player1Paddle.radius },
       )
     ) {
-      // Calculate collision response
-      const angle = CollisionDetection.calculateBounceAngle(
-        { x: player1Paddle.x, y: player1Paddle.y },
-        { x: puck.x, y: puck.y },
-      )
-
-      const speed = Math.sqrt(puck.vx * puck.vx + puck.vy * puck.vy)
-      const newSpeed = Math.max(speed, 5) // Minimum speed after collision
-
-      puck.vx = Math.cos(angle) * newSpeed
-      puck.vy = Math.sin(angle) * newSpeed
+      this.resolvePaddleBounce(player1Paddle, this.paddleVelocity.player1)
     }
 
-    // Check collision with player 2 paddle
     if (
       CollisionDetection.circleCollision(
         { x: puck.x, y: puck.y, radius: puck.radius },
         { x: player2Paddle.x, y: player2Paddle.y, radius: player2Paddle.radius },
       )
     ) {
-      // Calculate collision response
-      const angle = CollisionDetection.calculateBounceAngle(
-        { x: player2Paddle.x, y: player2Paddle.y },
-        { x: puck.x, y: puck.y },
-      )
-
-      const speed = Math.sqrt(puck.vx * puck.vx + puck.vy * puck.vy)
-      const newSpeed = Math.max(speed, 5) // Minimum speed after collision
-
-      puck.vx = Math.cos(angle) * newSpeed
-      puck.vy = Math.sin(angle) * newSpeed
+      this.resolvePaddleBounce(player2Paddle, this.paddleVelocity.player2)
     }
   }
 
-  /**
-   * Checks if a goal has been scored
-   */
+  private resolvePaddleBounce(paddle: Paddle, paddleVelocity: { vx: number; vy: number }): void {
+    const { puck } = this.state
+
+    const dx = puck.x - paddle.x
+    const dy = puck.y - paddle.y
+    const distance = Math.max(Math.hypot(dx, dy), 0.001)
+    const nx = dx / distance
+    const ny = dy / distance
+
+    // Push puck outside the paddle to avoid sticking
+    const overlap = paddle.radius + puck.radius - distance
+    if (overlap > 0) {
+      puck.x += nx * overlap
+      puck.y += ny * overlap
+    }
+
+    const incomingDot = puck.vx * nx + puck.vy * ny
+    const reflectVx = puck.vx - 2 * incomingDot * nx
+    const reflectVy = puck.vy - 2 * incomingDot * ny
+
+    const paddleInfluenceX = paddleVelocity.vx * 0.6
+    const paddleInfluenceY = paddleVelocity.vy * 0.6
+
+    let newVx = reflectVx + paddleInfluenceX
+    let newVy = reflectVy + paddleInfluenceY
+
+    let speed = Math.hypot(newVx, newVy)
+    if (speed < PUCK_SPEED_MIN) {
+      const scale = PUCK_SPEED_MIN / (speed || 1)
+      newVx *= scale
+      newVy *= scale
+      speed = PUCK_SPEED_MIN
+    }
+    if (speed > PUCK_SPEED_MAX) {
+      const scale = PUCK_SPEED_MAX / speed
+      newVx *= scale
+      newVy *= scale
+    }
+
+    puck.vx = newVx
+    puck.vy = newVy
+  }
+
   private checkForGoals(): void {
     const { puck, player1Goal, player2Goal } = this.state
 
-    // Check if puck is in player 1's goal
     if (
       puck.y + puck.radius >= player1Goal.y &&
       puck.x >= player1Goal.x &&
       puck.x <= player1Goal.x + player1Goal.width
     ) {
       this.handleGoal("player2")
-    }
-
-    // Check if puck is in player 2's goal
-    else if (
+    } else if (
       puck.y - puck.radius <= player2Goal.y + player2Goal.height &&
       puck.x >= player2Goal.x &&
       puck.x <= player2Goal.x + player2Goal.width
@@ -233,106 +263,108 @@ export class AirHockeyModel implements GameModel {
     }
   }
 
-  /**
-   * Handles a goal being scored
-   */
   private handleGoal(scorer: string): void {
     this.state.gameActive = false
-
-    // Update scores
     this.state.scores[scorer]++
-
-    // Notify listeners
     this.onGoalScored(scorer)
+    this.onStateChange()
 
-    // Check if game is over
-    if (this.state.scores[scorer] >= this.maxScore) {
+    if (this.state.scores[scorer] >= MAX_GOALS) {
       this.state.winner = scorer
       this.onGameOver(scorer)
-    } else {
-      // Reset for next round
-      setTimeout(() => {
-        this.resetPuck()
-        this.state.gameActive = true
-      }, 1000)
+      this.onStateChange()
+      return
     }
+
+    setTimeout(() => {
+      this.resetPuck()
+      this.state.gameActive = true
+      this.onStateChange()
+    }, GOAL_RESET_DELAY)
   }
 
-  /**
-   * Resets the puck to the center with a random velocity
-   */
   private resetPuck(): void {
-    const { boardWidth, boardHeight } = this.state
+    const { boardWidth, boardHeight, puck } = this.state
 
-    this.state.puck.x = boardWidth / 2
-    this.state.puck.y = boardHeight / 2
+    puck.x = boardWidth / 2
+    puck.y = boardHeight / 2
 
-    // Random angle between -45 and 45 degrees or 135 and 225 degrees
-    const angle =
-      Math.random() < 0.5
-        ? (Math.random() * Math.PI) / 2 - Math.PI / 4
-        : (Math.random() * Math.PI) / 2 - Math.PI / 4 + Math.PI
+    const baseAngle = Math.random() * Math.PI * 2
+    const speed = clamp(Math.random() * 4 + 5, PUCK_SPEED_MIN, PUCK_SPEED_MAX * 0.6)
+    puck.vx = Math.cos(baseAngle) * speed
+    puck.vy = Math.sin(baseAngle) * speed
 
-    const speed = 3
-    this.state.puck.vx = Math.cos(angle) * speed
-    this.state.puck.vy = Math.sin(angle) * speed
+    this.onStateChange()
   }
 
-  /**
-   * Moves player 1's paddle
-   */
   public movePlayer1Paddle(x: number, y: number): void {
     const { player1Paddle, boardWidth, boardHeight } = this.state
+    const clampedX = clamp(x, player1Paddle.radius, boardWidth - player1Paddle.radius)
+    const clampedY = clamp(y, boardHeight / 2, boardHeight - player1Paddle.radius)
 
-    // Constrain to board boundaries
-    player1Paddle.x = Math.max(player1Paddle.radius, Math.min(x, boardWidth - player1Paddle.radius))
+    this.paddleVelocity.player1.vx = clampedX - player1Paddle.x
+    this.paddleVelocity.player1.vy = clampedY - player1Paddle.y
 
-    // Constrain to bottom half of the board
-    player1Paddle.y = Math.max(boardHeight / 2, Math.min(y, boardHeight - player1Paddle.radius))
+    player1Paddle.x = clampedX
+    player1Paddle.y = clampedY
   }
 
-  /**
-   * Moves player 2's paddle
-   */
   public movePlayer2Paddle(x: number, y: number): void {
     const { player2Paddle, boardWidth, boardHeight } = this.state
+    const clampedX = clamp(x, player2Paddle.radius, boardWidth - player2Paddle.radius)
+    const clampedY = clamp(y, player2Paddle.radius, boardHeight / 2)
 
-    // Constrain to board boundaries
-    player2Paddle.x = Math.max(player2Paddle.radius, Math.min(x, boardWidth - player2Paddle.radius))
+    this.paddleVelocity.player2.vx = clampedX - player2Paddle.x
+    this.paddleVelocity.player2.vy = clampedY - player2Paddle.y
 
-    // Constrain to top half of the board
-    player2Paddle.y = Math.max(player2Paddle.radius, Math.min(y, boardHeight / 2))
+    player2Paddle.x = clampedX
+    player2Paddle.y = clampedY
   }
 
-  /**
-   * Updates the bot's paddle position
-   */
   public updateBotPaddle(difficulty: number): void {
-    const { puck, player2Paddle, boardWidth } = this.state
+    const { puck, player2Paddle, boardWidth, boardHeight } = this.state
 
-    // Only move if the puck is in the top half
-    if (puck.y < this.state.boardHeight / 2) {
-      // Calculate target X position (with some error based on difficulty)
-      const errorFactor = 1 - difficulty // 0 = perfect, 1 = very inaccurate
-      const randomError = (Math.random() - 0.5) * errorFactor * boardWidth * 0.5
-      const targetX = puck.x + randomError
-
-      // Move towards target with a speed based on difficulty
-      const speed = 0.05 + difficulty * 0.1 // 0.05 to 0.15
-      const newX = player2Paddle.x + (targetX - player2Paddle.x) * speed
-
-      // Update position (constrained to board)
-      player2Paddle.x = Math.max(player2Paddle.radius, Math.min(newX, boardWidth - player2Paddle.radius))
+    const focusZone = boardHeight * 0.6
+    if (puck.y >= focusZone) {
+      return
     }
+
+    const predictionSteps = 18 + Math.floor((1 - difficulty) * 20)
+    const predictedX = this.predictPuckX(predictionSteps)
+
+    const errorOffset = (Math.random() - 0.5) * (1 - difficulty) * boardWidth * 0.25
+    const targetX = clamp(predictedX + errorOffset, player2Paddle.radius, boardWidth - player2Paddle.radius)
+
+    const chaseSpeed = 0.08 + difficulty * 0.18
+    player2Paddle.x += (targetX - player2Paddle.x) * chaseSpeed
+    this.paddleVelocity.player2.vx = (targetX - player2Paddle.x) * chaseSpeed
   }
 
-  /**
-   * Resets the game
-   */
+  private predictPuckX(steps: number): number {
+    const { puck, boardWidth } = this.state
+    let simulatedX = puck.x
+    let simulatedY = puck.y
+    let vx = puck.vx
+    let vy = puck.vy
+
+    for (let i = 0; i < steps; i++) {
+      simulatedX += vx
+      simulatedY += vy
+
+      if (simulatedX - puck.radius <= 0 || simulatedX + puck.radius >= boardWidth) {
+        vx = -vx
+        simulatedX = clamp(simulatedX, puck.radius, boardWidth - puck.radius)
+      }
+    }
+
+    return simulatedX
+  }
+
   public reset(): void {
     this.state.scores = { player1: 0, player2: 0 }
     this.state.winner = null
     this.resetPuck()
     this.state.gameActive = true
+    this.onStateChange()
   }
 }

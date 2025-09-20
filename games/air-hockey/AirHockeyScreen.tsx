@@ -1,95 +1,145 @@
 "use client"
 
 import type React from "react"
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { SafeAreaView, ImageBackground } from "react-native"
+import AsyncStorage from "@react-native-async-storage/async-storage"
+
 import { AirHockeyView } from "./AirHockeyView"
 import { AirHockeyModel } from "./AirHockeyModel"
-import { AirHockeyController } from "./AirHockeyController"
+import { AirHockeyController, type AirHockeyDifficulty } from "./AirHockeyController"
 import { GameEngine } from "../../core/GameEngine"
+import type { GameRuntimeProps } from "../../core/gameRuntime"
 import { useSound } from "../../contexts/SoundContext"
 import { useAnalytics } from "../../contexts/AnalyticsContext"
 import { useSeasonal } from "../../contexts/SeasonalContext"
 
-interface AirHockeyScreenProps {
-  route: {
-    params: {
-      mode: "friend" | "bot"
-    }
-  }
-  navigation: any
-}
+const GOAL_STORAGE_KEY = "air-hockey-scores"
 
-/**
- * Air Hockey Screen Component
- *
- * This component connects the Air Hockey game to the React Native navigation
- */
-const AirHockeyScreen: React.FC<AirHockeyScreenProps> = ({ route, navigation }) => {
-  const { mode } = route.params
+const difficultyOrder: AirHockeyDifficulty[] = ["rookie", "pro", "legend"]
+
+const AirHockeyScreen: React.FC<GameRuntimeProps> = ({ gameId, mode, onExit, onEvent }) => {
   const { playSound } = useSound()
   const { trackEvent } = useAnalytics()
   const { getSeasonalGameBackground } = useSeasonal()
 
-  // Get screen dimensions
-  const boardWidth = 300
-  const boardHeight = 500
+  const boardWidth = 320
+  const boardHeight = 520
 
-  // Create model and controller
   const [model] = useState(() => new AirHockeyModel(boardWidth, boardHeight))
   const [controller] = useState(() => new AirHockeyController(model, mode))
+  const [forceRender, setForceRender] = useState(0)
+  const [goalFlash, setGoalFlash] = useState<"player1" | "player2" | null>(null)
+  const [difficulty, setDifficulty] = useState<AirHockeyDifficulty>("pro")
 
-  // Get game engine
+  const lastGoalTimeout = useRef<NodeJS.Timeout | null>(null)
+
   const gameEngine = GameEngine.getInstance()
 
-  // Register game with engine
   useEffect(() => {
-    gameEngine.registerGame("airHockey", model, controller)
+    model.setOnStateChange(() => {
+      setForceRender((value) => value + 1)
+    })
+  }, [model])
 
-    // Set up event handlers
+  useEffect(() => {
+    if (mode === "bot") {
+      controller.setBotDifficulty(difficulty)
+    }
+  }, [controller, difficulty, mode])
+
+  useEffect(() => {
+    const loadScores = async () => {
+      try {
+        const stored = await AsyncStorage.getItem(GOAL_STORAGE_KEY)
+        if (stored) {
+          const parsed = JSON.parse(stored) as { player1: number; player2: number }
+          if (parsed && typeof parsed.player1 === "number" && typeof parsed.player2 === "number") {
+            model.state.scores = parsed
+            setForceRender((value) => value + 1)
+          }
+        }
+      } catch (error) {
+        // ignore
+      }
+    }
+
+    loadScores()
+  }, [model])
+
+  useEffect(() => {
+    gameEngine.registerGame(gameId, model, controller)
+
     model.setOnGoalScored((player) => {
       playSound(require("../../assets/sounds/score.mp3"))
-      trackEvent("game_score", { game: "airHockey", player })
+      trackEvent("game_score", { game: gameId, player })
+      onEvent?.({ type: "score", payload: { player } })
+      setGoalFlash(player as "player1" | "player2")
+      if (lastGoalTimeout.current) {
+        clearTimeout(lastGoalTimeout.current)
+      }
+      lastGoalTimeout.current = setTimeout(() => {
+        setGoalFlash(null)
+      }, 900)
+      AsyncStorage.setItem(GOAL_STORAGE_KEY, JSON.stringify(model.state.scores)).catch(() => undefined)
     })
 
     model.setOnGameOver((winner) => {
       playSound(require("../../assets/sounds/win.mp3"))
-      trackEvent("game_over", { game: "airHockey", winner })
+      trackEvent("game_over", { game: gameId, winner })
+      onEvent?.({ type: "game_over", payload: { winner } })
     })
 
-    // Start the game
-    gameEngine.startGame("airHockey")
+    gameEngine.startGame(gameId)
     playSound(require("../../assets/sounds/game-start.mp3"))
-    trackEvent("game_start", { game: "airHockey", mode })
+    trackEvent("game_start", { game: gameId, mode, difficulty })
 
-    // Clean up
     return () => {
-      gameEngine.stopGame()
+      if (lastGoalTimeout.current) {
+        clearTimeout(lastGoalTimeout.current)
+      }
+      gameEngine.stopGame(gameId)
+      gameEngine.unregisterGame(gameId)
       controller.cleanup()
     }
-  }, [])
+  }, [controller, difficulty, gameEngine, gameId, mode, model, onEvent, playSound, trackEvent])
 
-  // Handle reset
-  const handleReset = () => {
+  const handleReset = useCallback(() => {
     model.reset()
     playSound(require("../../assets/sounds/game-start.mp3"))
-    trackEvent("game_reset", { game: "airHockey" })
-  }
+    trackEvent("game_reset", { game: gameId })
+    AsyncStorage.setItem(GOAL_STORAGE_KEY, JSON.stringify(model.state.scores)).catch(() => undefined)
+  }, [gameId, model, playSound, trackEvent])
 
-  // Handle back
-  const handleBack = () => {
+  const handleBack = useCallback(() => {
     playSound(require("../../assets/sounds/button-press.mp3"))
-    navigation.goBack()
-  }
+    onExit()
+  }, [onExit, playSound])
 
-  // Get seasonal background or use default
-  const backgroundImage = getSeasonalGameBackground("air-hockey") || require("../../assets/images/air-hockey-bg.png")
+  const handleDifficultyChange = useCallback(
+    (level: AirHockeyDifficulty) => {
+      setDifficulty(level)
+      controller.setBotDifficulty(level)
+      trackEvent("air_hockey_difficulty", { game: gameId, level })
+      onEvent?.({ type: "custom", payload: { action: "difficulty", level } })
+    },
+    [controller, gameId, onEvent, trackEvent],
+  )
+
+  const backgroundImage = useMemo(
+    () => getSeasonalGameBackground(gameId) || require("../../assets/images/air-hockey-bg.png"),
+    [gameId, getSeasonalGameBackground],
+  )
 
   return (
-    <ImageBackground source={backgroundImage} style={{ flex: 1 }}>
+    <ImageBackground key={`${forceRender}`} source={backgroundImage} style={{ flex: 1 }}>
       <SafeAreaView style={{ flex: 1 }}>
         <AirHockeyView
           state={model.state}
+          lastGoal={goalFlash}
+          mode={mode}
+          difficulty={difficulty}
+          onDifficultyChange={handleDifficultyChange}
           onReset={handleReset}
           onBack={handleBack}
           player1PanHandlers={controller.player1PanHandlers}

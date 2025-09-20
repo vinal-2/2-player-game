@@ -1,5 +1,5 @@
 import type { GameController } from "../../core/GameEngine"
-import type { TicTacToeModel } from "./TicTacToeModel"
+import type { TicTacToeModel, BotDifficulty } from "./TicTacToeModel"
 
 /**
  * Tic Tac Toe Game Controller
@@ -10,6 +10,8 @@ export class TicTacToeController implements GameController {
   private model: TicTacToeModel
   private gameMode: "friend" | "bot"
   private botDelay = 800 // milliseconds
+  private botDifficulty: BotDifficulty = "medium"
+  private botMoveTimeout: ReturnType<typeof setTimeout> | null = null
 
   constructor(model: TicTacToeModel, gameMode: "friend" | "bot") {
     this.model = model
@@ -36,10 +38,8 @@ export class TicTacToeController implements GameController {
    */
   private handleCellPress = (index: number): void => {
     // If in bot mode and it's the bot's turn, make a bot move after a delay
-    if (this.gameMode === "bot" && this.model.state.currentPlayer === "O" && !this.model.state.gameOver) {
-      setTimeout(() => {
-        this.model.makeBotMove()
-      }, this.botDelay)
+    if (this.shouldBotPlay()) {
+      this.scheduleBotMove()
     }
   }
 
@@ -50,10 +50,8 @@ export class TicTacToeController implements GameController {
     if (input.type === "cellPress") {
       const success = this.model.handleCellPress(input.index)
 
-      if (success && this.gameMode === "bot" && this.model.state.currentPlayer === "O" && !this.model.state.gameOver) {
-        setTimeout(() => {
-          this.model.makeBotMove()
-        }, this.botDelay)
+      if (success && this.shouldBotPlay()) {
+        this.scheduleBotMove()
       }
     } else if (input.type === "reset") {
       this.model.reset()
@@ -69,10 +67,37 @@ export class TicTacToeController implements GameController {
     this.botDelay = delay
   }
 
+  public setDifficulty(difficulty: BotDifficulty): void {
+    this.botDifficulty = difficulty
+    if (difficulty === "easy") {
+      this.botDelay = 900
+    } else if (difficulty === "hard") {
+      this.botDelay = 500
+    } else {
+      this.botDelay = 700
+    }
+  }
+
+  private shouldBotPlay(): boolean {
+    return this.gameMode === "bot" && this.model.state.currentPlayer === "O" && !this.model.state.gameOver
+  }
+
+  private scheduleBotMove(): void {
+    if (this.botMoveTimeout) {
+      clearTimeout(this.botMoveTimeout)
+    }
+    this.botMoveTimeout = setTimeout(() => {
+      this.model.makeBotMove(this.botDifficulty)
+      this.botMoveTimeout = null
+    }, this.botDelay)
+  }
+
   /**
    * Cleans up the controller
    */
   public cleanup(): void {
-    // No cleanup needed for Tic Tac Toe
+    if (this.botMoveTimeout) {
+      clearTimeout(this.botMoveTimeout)
+    }
   }
 }

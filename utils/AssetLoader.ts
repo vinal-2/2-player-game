@@ -3,6 +3,8 @@ import { Audio } from "expo-av"
 import { Image } from "react-native"
 import * as Font from "expo-font"
 
+import { imageManifest, soundManifest } from "../core/assets"
+
 /**
  * Asset Loader
  *
@@ -42,28 +44,11 @@ export class AssetLoader {
    * Preloads all images
    */
   public async preloadImages(): Promise<void> {
-    const imageAssets = [
-      require("../assets/images/logo.png"),
-      require("../assets/images/background.png"),
-      require("../assets/images/ping-pong-bg.png"),
-      require("../assets/images/air-hockey-bg.png"),
-      require("../assets/images/tic-tac-toe-bg.png"),
-      require("../assets/images/spinner-war-bg.png"),
-      require("../assets/images/settings-bg.png"),
-      // Add more images as needed
-    ]
-
-    // Create image promises
-    const imagePromises = imageAssets.map(async (asset) => {
+    const imagePromises = imageManifest.map(async (asset) => {
       if (typeof asset === "number") {
-        // Local require
         const { uri } = Asset.fromModule(asset)
         await Image.prefetch(uri)
         this.loadedImages.set(asset.toString(), asset)
-      } else {
-        // Remote URI
-        await Image.prefetch(asset)
-        this.loadedImages.set(asset, asset)
       }
     })
 
@@ -93,10 +78,7 @@ export class AssetLoader {
     ]
 
     // Create sound promises
-    const soundPromises = soundAssets.map(async ({ key, asset }) => {
-      const { sound } = await Audio.Sound.createAsync(asset)
-      this.loadedSounds.set(key, sound)
-    })
+    const soundPromises = soundAssets.map(async ({ key, asset }) => {\r\n      try {\r\n        const { sound } = await Audio.Sound.createAsync(asset)\r\n        this.loadedSounds.set(key, sound)\r\n      } catch (error) {\r\n        console.warn(`Sound asset ${key} failed to preload`, error)\r\n      }\r\n    })
 
     await Promise.all(soundPromises)
     console.log("Sounds preloaded successfully")
@@ -154,9 +136,7 @@ export class AssetLoader {
    */
   public async unloadAll(): Promise<void> {
     // Unload sounds
-    for (const sound of this.loadedSounds.values()) {
-      await sound.unloadAsync()
-    }
+    for (const sound of this.loadedSounds.values()) {\r\n      try {\r\n        await sound.unloadAsync()\r\n      } catch (error) {\r\n        console.warn("Sound could not be unloaded", error)\r\n      }\r\n    }
     this.loadedSounds.clear()
 
     // Clear image cache
@@ -165,3 +145,4 @@ export class AssetLoader {
     console.log("All assets unloaded")
   }
 }
+

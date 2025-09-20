@@ -1,38 +1,49 @@
 "use client"
 
 import type React from "react"
-import { useEffect, useRef } from "react"
-import { View, StyleSheet, Animated, Text, TouchableOpacity } from "react-native"
+import { useEffect, useMemo, useRef } from "react"
+import { View, StyleSheet, Animated, Text, TouchableOpacity, ImageBackground } from "react-native"
+import { LinearGradient } from "expo-linear-gradient"
 import { Ionicons } from "@expo/vector-icons"
+
 import type { AirHockeyState } from "./AirHockeyModel"
 import type { GameView } from "../../core/GameEngine"
+import type { AirHockeyDifficulty } from "./AirHockeyController"
 import { useSeasonal } from "../../contexts/SeasonalContext"
 import { useSound } from "../../contexts/SoundContext"
 
 interface AirHockeyViewProps {
   state: AirHockeyState
+  lastGoal: "player1" | "player2" | null
+  mode: "friend" | "bot"
+  difficulty: AirHockeyDifficulty
+  onDifficultyChange: (difficulty: AirHockeyDifficulty) => void
   onReset: () => void
   onBack: () => void
   player1PanHandlers: any
   player2PanHandlers: any
 }
 
-/**
- * Air Hockey Game View
- *
- * Renders the Air Hockey game UI
- */
+const difficultyLabels: Record<AirHockeyDifficulty, string> = {
+  rookie: "Rookie",
+  pro: "Pro",
+  legend: "Legend",
+}
+
 export const AirHockeyView: React.FC<AirHockeyViewProps> & GameView = ({
   state,
+  lastGoal,
+  mode,
+  difficulty,
+  onDifficultyChange,
   onReset,
   onBack,
   player1PanHandlers,
   player2PanHandlers,
 }) => {
-  const { seasonalTheme, getSeasonalGameBackground } = useSeasonal()
+  const { getSeasonalGameBackground } = useSeasonal()
   const { playSound } = useSound()
 
-  // References for animations
   const player1Position = useRef(
     new Animated.ValueXY({
       x: state.player1Paddle.x - state.player1Paddle.radius,
@@ -54,7 +65,9 @@ export const AirHockeyView: React.FC<AirHockeyViewProps> & GameView = ({
     }),
   ).current
 
-  // Update animated values when state changes
+  const goalFlashAnim = useRef(new Animated.Value(0)).current
+  const boardPulseAnim = useRef(new Animated.Value(0)).current
+
   useEffect(() => {
     player1Position.setValue({
       x: state.player1Paddle.x - state.player1Paddle.radius,
@@ -70,80 +83,181 @@ export const AirHockeyView: React.FC<AirHockeyViewProps> & GameView = ({
       x: state.puck.x - state.puck.radius,
       y: state.puck.y - state.puck.radius,
     })
-  }, [state])
+  }, [player1Position, player2Position, puckPosition, state])
 
-  // Get seasonal background
-  const backgroundImage = getSeasonalGameBackground("air-hockey") || require("../../assets/images/air-hockey-bg.png")
+  useEffect(() => {
+    if (lastGoal) {
+      goalFlashAnim.setValue(1)
+      Animated.timing(goalFlashAnim, {
+        toValue: 0,
+        duration: 600,
+        useNativeDriver: true,
+      }).start()
+
+      Animated.sequence([
+        Animated.timing(boardPulseAnim, {
+          toValue: 1,
+          duration: 160,
+          useNativeDriver: true,
+        }),
+        Animated.timing(boardPulseAnim, {
+          toValue: 0,
+          duration: 220,
+          useNativeDriver: true,
+        }),
+      ]).start()
+    }
+  }, [boardPulseAnim, goalFlashAnim, lastGoal])
+
+  const backgroundImage = useMemo(
+    () => getSeasonalGameBackground("air-hockey") || require("../../assets/images/air-hockey-bg.png"),
+    [getSeasonalGameBackground],
+  )
+
+  const renderDifficultySwitch = () => {
+    if (mode !== "bot") {
+      return null
+    }
+
+    const entries = Object.entries(difficultyLabels) as [AirHockeyDifficulty, string][]
+
+    return (
+      <View style={styles.difficultyRow}>
+        {entries.map(([level, label]) => {
+          const isActive = difficulty === level
+          return (
+            <TouchableOpacity
+              key={`difficulty-${level}`}
+              style={[styles.difficultyChip, isActive && styles.difficultyChipActive]}
+              onPress={() => {
+                playSound("toggle")
+                onDifficultyChange(level)
+              }}
+            >
+              <Text style={[styles.difficultyText, isActive && styles.difficultyTextActive]}>{label}</Text>
+            </TouchableOpacity>
+          )
+        })}
+      </View>
+    )
+  }
 
   return (
-    <View style={styles.container}>
+    <LinearGradient colors={["#0f172a", "#111827"]} style={styles.container}>
       <View style={styles.scoreBoard}>
-        <View style={styles.scoreContainer}>
+        <Animated.View
+          style={[styles.scoreCard, lastGoal === "player1" && styles.scoreCardActive]}
+        >
           <Text style={styles.scoreLabel}>Player 1</Text>
           <Text style={styles.scoreValue}>{state.scores.player1}</Text>
+        </Animated.View>
+
+        <View style={styles.bestOfContainer}>
+          <Ionicons name="flag" size={18} color="rgba(255,255,255,0.7)" />
+          <Text style={styles.bestOfText}>First to 5</Text>
         </View>
-        <View style={styles.scoreContainer}>
-          <Text style={styles.scoreLabel}>{state.gameMode === "friend" ? "Player 2" : "Bot"}</Text>
+
+        <Animated.View
+          style={[styles.scoreCard, lastGoal === "player2" && styles.scoreCardActive]}
+        >
+          <Text style={styles.scoreLabel}>{mode === "bot" ? "Bot" : "Player 2"}</Text>
           <Text style={styles.scoreValue}>{state.scores.player2}</Text>
+        </Animated.View>
+      </View>
+
+      {renderDifficultySwitch()}
+
+      <View style={styles.boardWrapper}>
+        <ImageBackground source={backgroundImage} style={styles.boardBackground}>
+          <Animated.View
+            pointerEvents="none"
+            style={[
+              styles.goalFlash,
+              {
+                opacity: goalFlashAnim,
+                backgroundColor:
+                  lastGoal === "player1"
+                    ? "rgba(59, 130, 246, 0.35)"
+                    : "rgba(249, 115, 22, 0.35)",
+              },
+            ]}
+          />
+
+          <Animated.View
+            style={[
+              styles.board,
+              {
+                transform: [
+                  {
+                    scale: boardPulseAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [1, 1.02],
+                    }),
+                  },
+                ],
+              },
+            ]}
+          >
+            <View style={styles.centerLine} />
+            <View style={styles.centerCircle} />
+
+            <Animated.View
+              style={[
+                styles.paddle,
+                styles.player2Paddle,
+                {
+                  width: state.player2Paddle.radius * 2,
+                  height: state.player2Paddle.radius * 2,
+                  transform: player2Position.getTranslateTransform(),
+                },
+              ]}
+              {...player2PanHandlers}
+            />
+
+            <Animated.View
+              style={[
+                styles.paddle,
+                styles.player1Paddle,
+                {
+                  width: state.player1Paddle.radius * 2,
+                  height: state.player1Paddle.radius * 2,
+                  transform: player1Position.getTranslateTransform(),
+                },
+              ]}
+              {...player1PanHandlers}
+            />
+
+            <Animated.View
+              style={[
+                styles.puck,
+                {
+                  width: state.puck.radius * 2,
+                  height: state.puck.radius * 2,
+                  transform: puckPosition.getTranslateTransform(),
+                },
+              ]}
+            />
+          </Animated.View>
+        </ImageBackground>
+      </View>
+
+      {state.winner && (
+        <View style={styles.winnerBanner}>
+          <Text style={styles.winnerText}>
+            {state.winner === "player1"
+              ? "Player 1 takes the match!"
+              : mode === "bot"
+                ? "The bot wins!"
+                : "Player 2 takes the match!"}
+          </Text>
         </View>
-      </View>
-
-      <View style={[styles.board, { backgroundColor: seasonalTheme.primaryColor }]}>
-        {/* Top goal */}
-        <View style={[styles.goal, styles.topGoal]} />
-
-        {/* Bottom goal */}
-        <View style={[styles.goal, styles.bottomGoal]} />
-
-        {/* Center line */}
-        <View style={styles.centerLine} />
-
-        {/* Player 2 paddle (top) */}
-        <Animated.View
-          style={[
-            styles.paddle,
-            styles.player2Paddle,
-            {
-              width: state.player2Paddle.radius * 2,
-              height: state.player2Paddle.radius * 2,
-              transform: player2Position.getTranslateTransform(),
-            },
-          ]}
-          {...player2PanHandlers}
-        />
-
-        {/* Player 1 paddle (bottom) */}
-        <Animated.View
-          style={[
-            styles.paddle,
-            styles.player1Paddle,
-            {
-              width: state.player1Paddle.radius * 2,
-              height: state.player1Paddle.radius * 2,
-              transform: player1Position.getTranslateTransform(),
-            },
-          ]}
-          {...player1PanHandlers}
-        />
-
-        {/* Puck */}
-        <Animated.View
-          style={[
-            styles.puck,
-            {
-              width: state.puck.radius * 2,
-              height: state.puck.radius * 2,
-              transform: puckPosition.getTranslateTransform(),
-            },
-          ]}
-        />
-      </View>
+      )}
 
       <View style={styles.footer}>
         <TouchableOpacity
           style={styles.resetButton}
           onPress={() => {
-            playSound(require("../../assets/sounds/button-press.mp3"))
+            playSound("round-start")
             onReset()
           }}
         >
@@ -154,143 +268,200 @@ export const AirHockeyView: React.FC<AirHockeyViewProps> & GameView = ({
         <TouchableOpacity
           style={styles.homeButton}
           onPress={() => {
-            playSound(require("../../assets/sounds/button-press.mp3"))
+            playSound("button-press")
             onBack()
           }}
         >
           <Ionicons name="home" size={20} color="white" />
-          <Text style={styles.buttonText}>Back to Menu</Text>
+          <Text style={styles.buttonText}>Back</Text>
         </TouchableOpacity>
       </View>
-    </View>
+    </LinearGradient>
   )
-}
-
-// Required method for GameView interface
-AirHockeyView.render = () => {
-  // This is handled by React's rendering system
-}
-
-// Required method for GameView interface
-AirHockeyView.update = (state: any) => {
-  // This is handled by React's props system
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F5F5F5",
-    alignItems: "center",
+    paddingVertical: 16,
     justifyContent: "space-between",
-    padding: 10,
   },
   scoreBoard: {
     flexDirection: "row",
-    width: "100%",
-    justifyContent: "space-around",
-    padding: 15,
-  },
-  scoreContainer: {
     alignItems: "center",
-    backgroundColor: "rgba(255, 255, 255, 0.8)",
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    borderRadius: 15,
-    elevation: 3,
+    justifyContent: "space-between",
+    paddingHorizontal: 24,
+  },
+  scoreCard: {
+    width: 110,
+    backgroundColor: "rgba(255,255,255,0.12)",
+    borderRadius: 18,
+    paddingVertical: 12,
+    alignItems: "center",
+    shadowColor: "#FFF",
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0,
+    shadowRadius: 12,
+  },
+  scoreCardActive: {
+    backgroundColor: "rgba(255,255,255,0.18)",
   },
   scoreLabel: {
-    fontSize: 16,
-    fontWeight: "bold",
-    color: "#555",
+    fontSize: 13,
+    color: "rgba(255,255,255,0.8)",
   },
   scoreValue: {
-    fontSize: 28,
-    fontWeight: "bold",
-    color: "#FF6B00",
+    marginTop: 6,
+    fontSize: 26,
+    fontWeight: "700",
+    color: "white",
+  },
+  bestOfContainer: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    backgroundColor: "rgba(255,255,255,0.1)",
+  },
+  bestOfText: {
+    color: "rgba(255,255,255,0.7)",
+    fontSize: 12,
+    marginTop: 4,
+  },
+  difficultyRow: {
+    flexDirection: "row",
+    justifyContent: "center",
+    marginTop: 12,
+  },
+  difficultyChip: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.25)",
+    marginHorizontal: 6,
+  },
+  difficultyChipActive: {
+    backgroundColor: "#38bdf8",
+    borderColor: "#38bdf8",
+  },
+  difficultyText: {
+    color: "rgba(255,255,255,0.7)",
+    fontWeight: "600",
+  },
+  difficultyTextActive: {
+    color: "white",
+  },
+  boardWrapper: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 20,
+  },
+  boardBackground: {
+    flex: 1,
+    width: "100%",
+    justifyContent: "center",
+    alignItems: "center",
+    borderRadius: 24,
+    overflow: "hidden",
+  },
+  goalFlash: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
   },
   board: {
-    width: "95%",
-    aspectRatio: 1.5,
-    borderRadius: 20,
+    width: "90%",
+    aspectRatio: 0.64,
+    borderRadius: 24,
+    backgroundColor: "rgba(15, 23, 42, 0.7)",
+    padding: 12,
     overflow: "hidden",
-    position: "relative",
-    elevation: 8,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 5,
-  },
-  goal: {
-    position: "absolute",
-    width: "40%",
-    height: 20,
-    backgroundColor: "#1565C0",
-    left: "30%",
-  },
-  topGoal: {
-    top: -10,
-    borderBottomLeftRadius: 10,
-    borderBottomRightRadius: 10,
-  },
-  bottomGoal: {
-    bottom: -10,
-    borderTopLeftRadius: 10,
-    borderTopRightRadius: 10,
   },
   centerLine: {
     position: "absolute",
+    left: 0,
+    right: 0,
     top: "50%",
-    width: "100%",
-    height: 4,
-    backgroundColor: "white",
-    opacity: 0.4,
+    height: 2,
+    backgroundColor: "rgba(255,255,255,0.3)",
+  },
+  centerCircle: {
+    position: "absolute",
+    left: "50%",
+    top: "50%",
+    width: 80,
+    height: 80,
+    marginLeft: -40,
+    marginTop: -40,
+    borderRadius: 40,
+    borderWidth: 2,
+    borderColor: "rgba(255,255,255,0.2)",
   },
   paddle: {
-    borderRadius: 50,
     position: "absolute",
-    elevation: 5,
+    borderRadius: 999,
+    justifyContent: "center",
+    alignItems: "center",
   },
   player1Paddle: {
-    backgroundColor: "#FF5252",
+    backgroundColor: "#f97316",
   },
   player2Paddle: {
-    backgroundColor: "#4CAF50",
+    backgroundColor: "#38bdf8",
   },
   puck: {
-    borderRadius: 50,
-    backgroundColor: "#FFC107",
     position: "absolute",
-    elevation: 5,
+    backgroundColor: "white",
+    borderRadius: 999,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 3,
+  },
+  winnerBanner: {
+    marginHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 16,
+    backgroundColor: "rgba(15, 23, 42, 0.85)",
+    alignItems: "center",
+  },
+  winnerText: {
+    color: "white",
+    fontWeight: "700",
+    fontSize: 16,
   },
   footer: {
     flexDirection: "row",
-    justifyContent: "space-around",
-    width: "100%",
-    padding: 15,
+    justifyContent: "space-between",
+    paddingHorizontal: 20,
+    marginBottom: 16,
   },
   resetButton: {
-    backgroundColor: "#FF5252",
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
+    backgroundColor: "#f97316",
+    paddingHorizontal: 18,
     paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 10,
-    elevation: 2,
+    borderRadius: 16,
   },
   homeButton: {
-    backgroundColor: "#4CAF50",
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
+    backgroundColor: "#38bdf8",
+    paddingHorizontal: 18,
     paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 10,
-    elevation: 2,
+    borderRadius: 16,
   },
   buttonText: {
     color: "white",
-    fontWeight: "bold",
+    fontWeight: "700",
     marginLeft: 8,
   },
 })
+
+export default AirHockeyView
