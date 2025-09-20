@@ -43,6 +43,22 @@ const SnakesDuelScreen: React.FC<GameRuntimeProps> = ({ gameId, mode, onExit, on
   const gameEngine = GameEngine.getInstance()
   const viewRef = useRef<View | null>(null)
 
+  const addAppleSplash = (position: { x: number; y: number }) => {
+    const id = `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`
+    setAppleSplashes((prev) => [...prev, { id, ...position }])
+    const timeout = setTimeout(() => {
+      setAppleSplashes((prev) => prev.filter((splash) => splash.id !== id))
+      delete splashTimers.current[id]
+    }, 550)
+    splashTimers.current[id] = timeout
+  }
+
+  const clearAppleSplashes = () => {
+    Object.values(splashTimers.current).forEach((timer) => clearTimeout(timer))
+    splashTimers.current = {}
+    setAppleSplashes([])
+  }
+
   useEffect(() => {
     AsyncStorage.getItem(MODE_STORAGE_KEY)
       .then((stored) => {
@@ -85,10 +101,9 @@ const SnakesDuelScreen: React.FC<GameRuntimeProps> = ({ gameId, mode, onExit, on
       .catch(() => undefined)
   }, [controller])
 
-  useEffect(
+ useEffect(
     () => () => {
-      Object.values(splashTimers.current).forEach((timer) => clearTimeout(timer))
-      splashTimers.current = {}
+      clearAppleSplashes()
     },
     [],
   )
@@ -157,6 +172,7 @@ const SnakesDuelScreen: React.FC<GameRuntimeProps> = ({ gameId, mode, onExit, on
   const handleToggleMode = () => {
     const nextMode = currentMode === "bot" ? "friend" : "bot"
     setCurrentMode(nextMode)
+    controller.setMode(nextMode)
     AsyncStorage.setItem(MODE_STORAGE_KEY, nextMode).catch(() => undefined)
     onEvent?.({ type: "custom", payload: { action: "mode_toggle", mode: nextMode } })
   }
@@ -167,6 +183,7 @@ const SnakesDuelScreen: React.FC<GameRuntimeProps> = ({ gameId, mode, onExit, on
     onEvent?.({ type: "custom", payload: { action: "reset" } })
     trackEvent("snakes_placeholder_reset", { game: gameId })
     setViewVersion((v) => v + 1)
+    clearAppleSplashes()
   }
 
   const handleRematch = () => {
@@ -174,6 +191,7 @@ const SnakesDuelScreen: React.FC<GameRuntimeProps> = ({ gameId, mode, onExit, on
     onEvent?.({ type: "custom", payload: { action: "rematch" } })
     trackEvent("snakes_rematch", { game: gameId })
     setViewVersion((v) => v + 1)
+    clearAppleSplashes()
   }
 
   const handleSelectSkin = (playerId: "player1" | "player2", skinId: string) => {
@@ -193,16 +211,6 @@ const SnakesDuelScreen: React.FC<GameRuntimeProps> = ({ gameId, mode, onExit, on
     AsyncStorage.setItem(DIFFICULTY_STORAGE_KEY, level).catch(() => undefined)
     trackEvent("snakes_difficulty", { game: gameId, level })
     onEvent?.({ type: "custom", payload: { action: "difficulty", level } })
-  }
-
-  const addAppleSplash = (position: { x: number; y: number }) => {
-    const id = `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`
-    setAppleSplashes((prev) => [...prev, { id, ...position }])
-    const timeout = setTimeout(() => {
-      setAppleSplashes((prev) => prev.filter((splash) => splash.id !== id))
-      delete splashTimers.current[id]
-    }, 550)
-    splashTimers.current[id] = timeout
   }
 
   return (

@@ -62,6 +62,8 @@
 | 2025-09-20 | T8 Movement/Collisions | Implemented snake movement loop, collision resolution, and apple respawn; updated specs/QA.
 | 2025-09-20 | T8 Prep Workboard | Defined Snakes Duel prep tasks (grid spec, bot plan, skins brief, skeleton, telemetry).
 | 2025-09-20 | T8 Difficulty UI | Added bot difficulty chips, AI telemetry events, and persistence for Snakes Duel. |
+| 2025-09-20 | Spinner War Fixes | Removed stray module identifiers, enabled reset handling, honoured initial VS Bot mode, and added mode/difficulty highlights. |
+| 2025-09-20 | T8 Snakes Polish | Added apple splash FX with haptics, rematch overlay controls, AI telemetry escape event, and art handoff checklist. |
 
 ## Competitive Insights (Notes)
 - Content density: 40ï¿½50 lightweight games with consistent input patterns; prioritize fast load and 1ï¿½3 controls.
@@ -75,7 +77,7 @@
 - T5 polish: monitor goalie fairness after tuning; consider layered cheer FX if players request more hype.
 - T6 polish: run extended rally QA; evaluate adding bot tier for solo mode.
 - T7 Spinner War backlog: evaluate additional power-ups, haptics, and boost balance post QA (T7-A/B/C/D/E completed).
-- T8 Snakes Duel: harden movement flow (round restart UI, apple FX), finalise bot difficulty tuning/telemetry, and prepare art handoff deliverables.
+- T8 Snakes Duel: await art/FX delivery, run final smoke QA, and prep summary ahead of T9 kickoff.
 
 ## Notes
 - Session work (this chat): consolidated Ping Pong into MVC; tuned Air Hockey physics (friction 0.9965, damping 0.965, speed caps), ensured goal reset stability.

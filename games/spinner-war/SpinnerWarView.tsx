@@ -1,4 +1,3 @@
-tsx
 import React, { forwardRef, useImperativeHandle, useMemo, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ImageBackground, Image, Animated } from 'react-native';
 import { useSeasonal } from '../../contexts/SeasonalContext';
@@ -7,6 +6,8 @@ import { Ionicons } from '@expo/vector-icons';
 
 interface SpinnerWarViewProps {
   state: SpinnerWarState;
+  mode: "friend" | "bot";
+  difficulty: "rookie" | "pro" | "legend";
   onReset: () => void;
   onBack: () => void;
   onPress: (player: "player1" | "player2", action: string) => void;
@@ -17,6 +18,8 @@ interface SpinnerWarViewProps {
 
 export const SpinnerWarView = forwardRef(({ 
   state,
+  mode,
+  difficulty,
   onBack,
   onReset,
   onPress
@@ -91,21 +94,36 @@ export const SpinnerWarView = forwardRef(({
         </View>
 
         <View style={styles.modeRow}>
-          <TouchableOpacity style={styles.chip} onPress={() => onModeChange && onModeChange('friend')}>
-            <Text style={styles.chipText}>2P</Text>
+          <TouchableOpacity
+            style={[styles.chip, mode === 'friend' && styles.chipActive]}
+            onPress={() => onModeChange && onModeChange('friend')}
+          >
+            <Text style={[styles.chipText, mode === 'friend' && styles.chipTextActive]}>2P</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.chip} onPress={() => onModeChange && onModeChange('bot')}>
-            <Text style={styles.chipText}>Bot</Text>
+          <TouchableOpacity
+            style={[styles.chip, mode === 'bot' && styles.chipActive]}
+            onPress={() => onModeChange && onModeChange('bot')}
+          >
+            <Text style={[styles.chipText, mode === 'bot' && styles.chipTextActive]}>Bot</Text>
           </TouchableOpacity>
           <View style={{ width: 12 }} />
-          <TouchableOpacity style={styles.chip} onPress={() => onDifficultyChange && onDifficultyChange('rookie')}>
-            <Text style={styles.chipText}>Rookie</Text>
+          <TouchableOpacity
+            style={[styles.chip, difficulty === 'rookie' && styles.chipActive]}
+            onPress={() => onDifficultyChange && onDifficultyChange('rookie')}
+          >
+            <Text style={[styles.chipText, difficulty === 'rookie' && styles.chipTextActive]}>Rookie</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.chip} onPress={() => onDifficultyChange && onDifficultyChange('pro')}>
-            <Text style={styles.chipText}>Pro</Text>
+          <TouchableOpacity
+            style={[styles.chip, difficulty === 'pro' && styles.chipActive]}
+            onPress={() => onDifficultyChange && onDifficultyChange('pro')}
+          >
+            <Text style={[styles.chipText, difficulty === 'pro' && styles.chipTextActive]}>Pro</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.chip} onPress={() => onDifficultyChange && onDifficultyChange('legend')}>
-            <Text style={styles.chipText}>Legend</Text>
+          <TouchableOpacity
+            style={[styles.chip, difficulty === 'legend' && styles.chipActive]}
+            onPress={() => onDifficultyChange && onDifficultyChange('legend')}
+          >
+            <Text style={[styles.chipText, difficulty === 'legend' && styles.chipTextActive]}>Legend</Text>
           </TouchableOpacity>
         </View>
 
@@ -260,9 +278,15 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     backgroundColor: 'rgba(255,255,255,0.12)'
   },
+  chipActive: {
+    backgroundColor: 'rgba(59,130,246,0.9)'
+  },
   chipText: {
     color: 'white',
     fontWeight: '700'
+  },
+  chipTextActive: {
+    color: '#0f172a'
   },
   boostBadge: {
     position: 'absolute',

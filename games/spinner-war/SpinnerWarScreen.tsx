@@ -1,4 +1,3 @@
-tsx
 "use client"
 
 import type React from "react"
@@ -22,8 +21,14 @@ const SpinnerWarScreen: React.FC<GameRuntimeProps> = ({ gameId, mode, onExit, on
   const arenaRadius = 140
   const arenaCenterX = 180
   const arenaCenterY = 260
+  const initialMode = mode === "bot" ? "bot" : "friend"
+  const MODE_STORAGE_KEY = "spinner-war-mode"
+  const DIFFICULTY_STORAGE_KEY = "spinner-war-difficulty"
+
   const [model] = useState(() => new SpinnerWarModel(arenaRadius, arenaCenterX, arenaCenterY))
-  const [controller] = useState(() => new SpinnerWarController(model))
+  const [controller] = useState(() => new SpinnerWarController(model, initialMode))
+  const [currentMode, setCurrentMode] = useState<"friend" | "bot">(initialMode)
+  const [selectedDifficulty, setSelectedDifficulty] = useState<"rookie" | "pro" | "legend">("pro")
   const viewRef = React.useRef<{ triggerImpact(): void } | null>(null)
 
   const gameEngine = GameEngine.getInstance()
@@ -68,10 +73,26 @@ const SpinnerWarScreen: React.FC<GameRuntimeProps> = ({ gameId, mode, onExit, on
   }, [])
 
   useEffect(() => {
-    AsyncStorage.getItem("spinner-war-difficulty")
+    AsyncStorage.getItem(MODE_STORAGE_KEY)
+      .then((stored) => {
+        if (stored === "friend" || stored === "bot") {
+          setCurrentMode(stored)
+          controller.setMode(stored)
+        } else {
+          controller.setMode(initialMode)
+        }
+      })
+      .catch(() => {
+        controller.setMode(initialMode)
+      })
+  }, [controller, initialMode])
+
+  useEffect(() => {
+    AsyncStorage.getItem(DIFFICULTY_STORAGE_KEY)
       .then((stored) => {
         if (stored === "rookie" || stored === "pro" || stored === "legend") {
-          controller.handleInput({ type: `difficulty${stored}` })
+          setSelectedDifficulty(stored)
+          controller.setDifficulty(stored)
         }
       })
       .catch(() => undefined)
@@ -91,12 +112,15 @@ const SpinnerWarScreen: React.FC<GameRuntimeProps> = ({ gameId, mode, onExit, on
     controller.handleInput({ type: action + player })
   }
 
-  const handleMode = (mode: "friend" | "bot") => {
-    controller.handleInput({ type: mode === "bot" ? "modebot" : "modefriend" })
+  const handleMode = (nextMode: "friend" | "bot") => {
+    setCurrentMode(nextMode)
+    controller.setMode(nextMode)
+    AsyncStorage.setItem(MODE_STORAGE_KEY, nextMode).catch(() => undefined)
   }
   const handleDifficulty = (level: "rookie" | "pro" | "legend") => {
-    controller.handleInput({ type: `difficulty${level}` })
-    AsyncStorage.setItem("spinner-war-difficulty", level).catch(() => undefined)
+    setSelectedDifficulty(level)
+    controller.setDifficulty(level)
+    AsyncStorage.setItem(DIFFICULTY_STORAGE_KEY, level).catch(() => undefined)
   }
 
   const backgroundImage = getSeasonalGameBackground(gameId) || require("../../assets/images/spinner-war-bg.png")
@@ -110,6 +134,8 @@ const SpinnerWarScreen: React.FC<GameRuntimeProps> = ({ gameId, mode, onExit, on
           onReset={handleReset}
           onBack={handleBack}
           onPress={handlePress}
+          mode={currentMode}
+          difficulty={selectedDifficulty}
           onModeChange={handleMode}
           onDifficultyChange={handleDifficulty}
         />

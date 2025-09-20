@@ -12,14 +12,15 @@ export class SpinnerWarController implements GameController {
   private inputManager: InputManager;
   private moveSpeed = 1;
   private pushForce = 0.2;
-  private mode: "friend" | "bot" = "friend";
+  private mode: "friend" | "bot";
   private botDifficulty: "rookie" | "pro" | "legend" = "pro";
   private impactCooldown = 0;
-  
+ 
 
-  constructor(model: SpinnerWarModel) {
+  constructor(model: SpinnerWarModel, initialMode: "friend" | "bot" = "friend") {
     this.model = model;
     this.inputManager = InputManager.getInstance();
+    this.mode = initialMode;
   }
 
   /**
@@ -112,6 +113,30 @@ export class SpinnerWarController implements GameController {
    * Handles any input
    */
   public handleInput(input: any): void {
+    switch (input.type) {
+      case "reset":
+        this.model.reset();
+        return;
+      case "modebot":
+        this.setMode("bot");
+        return;
+      case "modefriend":
+        this.setMode("friend");
+        return;
+      case "difficultyrookie":
+        this.botDifficulty = "rookie";
+        return;
+      case "difficultypro":
+        this.botDifficulty = "pro";
+        return;
+      case "difficultylegend":
+        this.botDifficulty = "legend";
+        return;
+      case "impactcooldown":
+        this.impactCooldown = Math.max(this.impactCooldown, input.frames ?? 12);
+        return;
+    }
+
     if (!this.model.state.gameActive) return;
 
     switch (input.type) {
@@ -133,29 +158,19 @@ export class SpinnerWarController implements GameController {
       case "rotateplayer2":
         this.model.movePlayer2(this.moveSpeed, 0);
         break;
-      case "modebot":
-        this.mode = "bot";
-        break;
-      case "modefriend":
-        this.mode = "friend";
-        break;
-      case "difficultyrookie":
-        this.botDifficulty = "rookie";
-        break;
-      case "difficultypro":
-        this.botDifficulty = "pro";
-        break;
-      case "difficultylegend":
-        this.botDifficulty = "legend";
-        break;
-      case "impactcooldown":
-        this.impactCooldown = Math.max(this.impactCooldown, input.frames ?? 12);
-        break;
     }
   }
 
   public registerImpact(energy: number): void {
     this.impactCooldown = Math.max(this.impactCooldown, Math.ceil(6 + energy));
+  }
+
+  public setMode(mode: "friend" | "bot"): void {
+    this.mode = mode;
+  }
+
+  public setDifficulty(level: BotDifficulty): void {
+    this.botDifficulty = level;
   }
 
   /**
