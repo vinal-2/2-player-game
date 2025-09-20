@@ -36,5 +36,4 @@
 ### Snakes Duel Difficulty & Telemetry
 - [ ] Switch Rookie/Pro/Legend and verify bot behaviour changes (replan cadence).
 - [ ] Confirm analytics events fire for apple_eaten, collision, round_end, snakes_ai_replan, snakes_ai_escape (use debug logs).
-
-
+@codex
