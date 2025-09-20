@@ -34,6 +34,7 @@
 
 ## Implementation Status
 - A* core + flood-fill helpers scaffolded in `games/snakes-duel/utils/pathfinding.ts` with neighbour pooling and expansion caps (250/300).
-- Next: integrate into controller update loop, add safety scoring, and build unit tests for edge cases (tight corridors, head-on race).
+- Controller integrates helpers with Rookie/Pro/Legend configs, goal jitter, and flood-fill fallback; emits `snakes_ai_replan` + `snakes_ai_escape` telemetry.
+- Next: unit tests for tight corridors/head-on scenarios and heuristic tuning for higher tiers.
 - Controller now invokes A* helpers every 6 ticks with flood-fill fallback; collision integration next step.
 - Difficulty config: rookie(8-frame replan, low node cap), pro(6-frame), legend(4-frame) with goal jitter; controller now honours selection.

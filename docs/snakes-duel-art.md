@@ -39,3 +39,10 @@
 ## Implementation Status
 - Skin selection UI added in Snakes Duel placeholder screen; selections persist via AsyncStorage and update snake palettes.
 
+
+## Handoff Checklist
+- Deliver PSD/SVG for body segments (head/straight/turn/tail) per base + seasonal variants.
+- Provide particle textures for seasonal trails (winter frost, spring bloom, summer sparkle, autumn leaf).
+- Supply palette tokens for integration into `SeasonalContext` mapping.
+- Target delivery: 2025-09-27 for concept sign-off; final assets by 2025-10-05.
+

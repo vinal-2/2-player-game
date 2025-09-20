@@ -6,7 +6,8 @@
 - `snakes_collision` { loser, cause: "wall" | "self" | "opponent", length }
 - `snakes_draw` { reason: "head_on" | "timeout" }
 - `snakes_speed_change` { tickRate }
-- `snakes_ai_replan` { difficulty, reason }
+- `snakes_ai_replan` { difficulty, reason: "path" | "cached" }
+- `snakes_ai_escape` { difficulty }
 
 ## Session Metrics
 - Track average round duration, apples per minute, and quit rate before finish.
@@ -17,7 +18,7 @@
 - Debounce high-frequency events (apple eaten) if necessary by batching every 3 ticks.
 
 ## QA Hooks
-- Add smoke test steps to docs/QA.md covering round start, apple consumption, collision, and telemetry validation via debug overlay.
+- Add smoke test steps to docs/QA.md covering round start, apple consumption, collision, telemetry validation (`snakes_ai_replan`, `snakes_ai_escape`).
 
 ## Next Steps
 - Align event names with analytics backend schema.

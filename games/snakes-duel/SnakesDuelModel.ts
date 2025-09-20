@@ -16,7 +16,7 @@ export interface SnakeRuntime {
 }
 
 export type SnakesDuelEvent =
-  | { type: "apple_eaten"; playerId: string; length: number; tickRate: number }
+  | { type: "apple_eaten"; playerId: string; length: number; tickRate: number; position: SnakeSegment }
   | { type: "collision"; playerId: string; reason: "wall" | "self" | "opponent" | "head_on"; tick: number }
   | { type: "round_end"; winner: string | null; ticks: number }
 
@@ -38,11 +38,14 @@ const createEmptyGrid = (width: number, height: number) =>
 const BASE_TICK_RATE = 6
 const MAX_TICK_RATE = 10
 const RAMP_APPLES = 20
+const COUNTDOWN_SECONDS = 3
 
 export class SnakesDuelModel implements GameModel {
   public isActive = false
   public state: SnakesDuelState
+
   private tickAccumulator = 0
+  private countdownTimer = 0
   private emitEvent: (event: SnakesDuelEvent) => void = () => {}
 
   constructor(public readonly gridWidth: number, public readonly gridHeight: number) {
@@ -64,12 +67,26 @@ export class SnakesDuelModel implements GameModel {
 
   public initialize(): void {
     this.seedDemoState()
-    this.state.status = "running"
-    this.isActive = true
+    this.startCountdown(COUNTDOWN_SECONDS)
   }
 
   public update(deltaTime: number): void {
-    if (this.state.status !== "running") return
+    if (this.state.status === "gameover") {
+      return
+    }
+
+    if (this.state.status === "countdown") {
+      this.countdownTimer -= deltaTime
+      this.state.countdown = Math.max(1, Math.ceil(this.countdownTimer))
+      if (this.countdownTimer <= 0) {
+        this.beginRound()
+      }
+      return
+    }
+
+    if (this.state.status !== "running") {
+      return
+    }
 
     this.tickAccumulator += deltaTime
     const tickInterval = 1 / this.state.tickRate
@@ -92,6 +109,26 @@ export class SnakesDuelModel implements GameModel {
       lastEliminated: [],
     }
     this.seedDemoState()
+    this.startCountdown(COUNTDOWN_SECONDS)
+  }
+
+  private startCountdown(seconds: number): void {
+    this.state.status = "countdown"
+    this.countdownTimer = seconds
+    this.state.countdown = Math.ceil(seconds)
+    this.tickAccumulator = 0
+    this.isActive = true
+  }
+
+  public startRematchCountdown(): void {
+    this.startCountdown(COUNTDOWN_SECONDS)
+  }
+
+  private beginRound(): void {
+    this.state.status = "running"
+    this.state.countdown = undefined
+    this.state.ticks = 0
+    this.tickAccumulator = 0
   }
 
   private step(): void {
@@ -186,6 +223,7 @@ export class SnakesDuelModel implements GameModel {
           playerId: snake.id,
           length: snake.segments.length,
           tickRate: this.state.tickRate,
+          position: nextHead,
         })
       }
 
@@ -213,7 +251,6 @@ export class SnakesDuelModel implements GameModel {
     if (surviving.length === 0) {
       this.state.status = "gameover"
       this.state.winner = null
-      this.isActive = false
       this.emitEvent({ type: "round_end", winner: null, ticks: this.state.ticks })
       return
     }
@@ -221,8 +258,8 @@ export class SnakesDuelModel implements GameModel {
     if (surviving.length === 1) {
       this.state.status = "gameover"
       this.state.winner = surviving[0].id
-      this.isActive = false
       this.emitEvent({ type: "round_end", winner: surviving[0].id, ticks: this.state.ticks })
+      return
     }
   }
 
@@ -322,3 +359,4 @@ export class SnakesDuelModel implements GameModel {
     this.state.apples = [{ x: centerX, y: centerY }]
   }
 }
+

@@ -30,8 +30,10 @@
 - [ ] Verify snakes advance per tick and grow on apple consumption.
 - [ ] Confirm wall/self/opponent collisions end the round and winner recorded.
 - [ ] Head-on collision produces draw (no winner).
+- [ ] Countdown overlay appears before each round; Rematch button restarts countdown.
+- [ ] Apple splash FX renders and clears; haptics trigger on apple/collision.
 
 ### Snakes Duel Difficulty & Telemetry
 - [ ] Switch Rookie/Pro/Legend and verify bot behaviour changes (replan cadence).
-- [ ] Confirm analytics events fire for apple_eaten, collision, round_end (use debug logs).
+- [ ] Confirm analytics events fire for apple_eaten, collision, round_end, snakes_ai_replan, snakes_ai_escape (use debug logs).
 

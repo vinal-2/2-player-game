@@ -4,6 +4,7 @@ import type React from "react"
 import { useEffect, useRef, useState } from "react"
 import { SafeAreaView, ImageBackground, View } from "react-native"
 import AsyncStorage from "@react-native-async-storage/async-storage"
+import * as Haptics from "expo-haptics"
 
 import { GameEngine } from "../../core/GameEngine"
 import { useSeasonal } from "../../contexts/SeasonalContext"
@@ -36,6 +37,8 @@ const SnakesDuelScreen: React.FC<GameRuntimeProps> = ({ gameId, mode, onExit, on
   })
   const [difficulty, setDifficulty] = useState<"rookie" | "pro" | "legend">("pro")
   const [viewVersion, setViewVersion] = useState(0)
+  const [appleSplashes, setAppleSplashes] = useState<Array<{ id: string; x: number; y: number }>>([])
+  const splashTimers = useRef<Record<string, NodeJS.Timeout>>({})
   const backgroundImage = getSeasonalGameBackground(gameId) || require("../../assets/images/spinner-war-bg.png")
   const gameEngine = GameEngine.getInstance()
   const viewRef = useRef<View | null>(null)
@@ -82,6 +85,14 @@ const SnakesDuelScreen: React.FC<GameRuntimeProps> = ({ gameId, mode, onExit, on
       .catch(() => undefined)
   }, [controller])
 
+  useEffect(
+    () => () => {
+      Object.values(splashTimers.current).forEach((timer) => clearTimeout(timer))
+      splashTimers.current = {}
+    },
+    [],
+  )
+
   useEffect(() => {
     controller.setMode(currentMode)
   }, [controller, currentMode])
@@ -91,6 +102,13 @@ const SnakesDuelScreen: React.FC<GameRuntimeProps> = ({ gameId, mode, onExit, on
   }, [controller, difficulty])
 
   useEffect(() => {
+    controller.setEventEmitter((event) => {
+      trackEvent("snakes_ai_replan", { game: gameId, difficulty: event.difficulty, reason: event.reason })
+      if (event.reason === "fallback") {
+        trackEvent("snakes_ai_escape", { game: gameId, difficulty: event.difficulty })
+      }
+      onEvent?.({ type: "custom", payload: { action: "ai_replan", ...event } })
+    })
     model.setEventEmitter(handleModelEvent)
     gameEngine.registerGame(gameId, model, controller)
     model.initialize()
@@ -109,15 +127,18 @@ const SnakesDuelScreen: React.FC<GameRuntimeProps> = ({ gameId, mode, onExit, on
   const handleModelEvent = (event: SnakesDuelEvent) => {
     switch (event.type) {
       case "apple_eaten":
+        triggerHaptic("light")
         trackEvent("snakes_apple_eaten", {
           game: gameId,
           player: event.playerId,
           length: event.length,
           tickRate: event.tickRate,
         })
+        addAppleSplash(event.position)
         onEvent?.({ type: "custom", payload: { action: "apple", ...event } })
         break
       case "collision":
+        triggerHaptic("heavy")
         trackEvent("snakes_collision", {
           game: gameId,
           player: event.playerId,
@@ -126,6 +147,7 @@ const SnakesDuelScreen: React.FC<GameRuntimeProps> = ({ gameId, mode, onExit, on
         onEvent?.({ type: "custom", payload: { action: "collision", ...event } })
         break
       case "round_end":
+        triggerHaptic("medium")
         trackEvent("snakes_round_end", { game: gameId, winner: event.winner, ticks: event.ticks })
         onEvent?.({ type: "custom", payload: { action: "round_end", ...event } })
         break
@@ -144,6 +166,13 @@ const SnakesDuelScreen: React.FC<GameRuntimeProps> = ({ gameId, mode, onExit, on
     applySkinsToModel(model, selectedSkins)
     onEvent?.({ type: "custom", payload: { action: "reset" } })
     trackEvent("snakes_placeholder_reset", { game: gameId })
+    setViewVersion((v) => v + 1)
+  }
+
+  const handleRematch = () => {
+    model.startRematchCountdown()
+    onEvent?.({ type: "custom", payload: { action: "rematch" } })
+    trackEvent("snakes_rematch", { game: gameId })
     setViewVersion((v) => v + 1)
   }
 
@@ -166,6 +195,16 @@ const SnakesDuelScreen: React.FC<GameRuntimeProps> = ({ gameId, mode, onExit, on
     onEvent?.({ type: "custom", payload: { action: "difficulty", level } })
   }
 
+  const addAppleSplash = (position: { x: number; y: number }) => {
+    const id = `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`
+    setAppleSplashes((prev) => [...prev, { id, ...position }])
+    const timeout = setTimeout(() => {
+      setAppleSplashes((prev) => prev.filter((splash) => splash.id !== id))
+      delete splashTimers.current[id]
+    }, 550)
+    splashTimers.current[id] = timeout
+  }
+
   return (
     <ImageBackground source={backgroundImage} style={{ flex: 1 }}>
       <SafeAreaView style={{ flex: 1 }}>
@@ -175,11 +214,13 @@ const SnakesDuelScreen: React.FC<GameRuntimeProps> = ({ gameId, mode, onExit, on
           mode={currentMode}
           selectedSkins={selectedSkins}
           selectedDifficulty={difficulty}
+          appleSplashes={appleSplashes}
           onSelectDifficulty={handleSelectDifficulty}
           onSelectSkin={handleSelectSkin}
           onBack={onExit}
           onReset={handleReset}
           onToggleMode={handleToggleMode}
+          onRematch={handleRematch}
           key={`snakes-view-${viewVersion}`}
         />
       </SafeAreaView>
@@ -198,4 +239,24 @@ const applySkinsToModel = (
   })
 }
 
+const triggerHaptic = async (style: "light" | "medium" | "heavy") => {
+  try {
+    switch (style) {
+      case "light":
+        await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+        break
+      case "medium":
+        await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
+        break
+      case "heavy":
+        await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy)
+        break
+    }
+  } catch {
+    // ignore haptics failures
+  }
+}
+
 export default SnakesDuelScreen
+
+

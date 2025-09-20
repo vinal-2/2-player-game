@@ -10,11 +10,18 @@ const BOT_CONFIG = {
 
 type BotDifficulty = keyof typeof BOT_CONFIG
 
+type ControllerEvent = {
+  type: "ai_replan"
+  difficulty: BotDifficulty
+  reason: "path" | "fallback" | "cached"
+}
+
 export class SnakesDuelController implements GameController {
   private mode: "friend" | "bot"
   private difficulty: BotDifficulty = "pro"
   private frameCounter = 0
   private cachedPath: { steps: { x: number; y: number }[]; lastHead: { x: number; y: number } } | null = null
+  private emitEvent: (event: ControllerEvent) => void = () => {}
 
   constructor(private readonly model: SnakesDuelModel, mode: "friend" | "bot") {
     this.mode = mode
@@ -50,6 +57,7 @@ export class SnakesDuelController implements GameController {
       const next = this.cachedPath.steps[1]
       if (next) {
         this.setDirectionTowards(botSnake, next)
+        this.emitEvent({ type: "ai_replan", difficulty: this.difficulty, reason: "cached" })
         return
       }
     }
@@ -65,6 +73,7 @@ export class SnakesDuelController implements GameController {
       const safeDirection = this.findSafestDirection(botSnake, grid, config.floodNodes)
       if (safeDirection) {
         botSnake.direction = safeDirection
+        this.emitEvent({ type: "ai_replan", difficulty: this.difficulty, reason: "fallback" })
       }
       return
     }
@@ -77,6 +86,7 @@ export class SnakesDuelController implements GameController {
     const next = this.cachedPath.steps[1]
     if (next) {
       this.setDirectionTowards(botSnake, next)
+      this.emitEvent({ type: "ai_replan", difficulty: this.difficulty, reason: "path" })
     }
   }
 
@@ -88,6 +98,10 @@ export class SnakesDuelController implements GameController {
   public setDifficulty(level: BotDifficulty): void {
     this.difficulty = level
     this.cachedPath = null
+  }
+
+  public setEventEmitter(emitter: (event: ControllerEvent) => void) {
+    this.emitEvent = emitter
   }
 
   public handleInput(): void {}

@@ -13,8 +13,8 @@
 
 ## Game Flow
 1. Countdown (3 → 1) with fade-in overlay.
-2. Game runs until a snake collides with wall, itself, or opponent.
-3. Round summary screen with quick rematch / quit.
+2. Game runs until a snake collides with wall, itself, or opponent (draw on head-on).
+3. Round summary overlay with manual Rematch/Menu buttons and countdown restart trigger.
 4. Support best-of N configuration (default 3).
 
 ## Controls & Modes
@@ -24,8 +24,9 @@
 
 ## Systems
 - Apples spawn away from snake heads; ensure minimum distance of 3 cells.
-- Handle simultaneous collisions deterministically (head-on ties result in draw rematch).
+- Handle simultaneous collisions deterministically (head-on ties result in draw rematch countdown).
 - Support cosmetic skins (color + trail) without gameplay impact.
+- Trigger haptics/audio splash on apple consumption and collision events.
 
 ## Next Steps
 - Finalise visual mock-ups with art team.

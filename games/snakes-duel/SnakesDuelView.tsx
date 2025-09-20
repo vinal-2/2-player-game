@@ -8,11 +8,13 @@ interface SnakesDuelViewProps {
   mode: "friend" | "bot"
   selectedSkins: Record<"player1" | "player2", string>
   selectedDifficulty: "rookie" | "pro" | "legend"
+  appleSplashes: Array<{ id: string; x: number; y: number }>
   onSelectSkin: (playerId: "player1" | "player2", skinId: string) => void
   onSelectDifficulty: (level: "rookie" | "pro" | "legend") => void
   onBack: () => void
   onReset: () => void
   onToggleMode: () => void
+  onRematch: () => void
 }
 
 const SKIN_OPTIONS = [
@@ -35,9 +37,28 @@ const skinPalette: Record<string, { fill: string; glow: string }> = {
   "midnight-pixel": { fill: "#a855f7", glow: "rgba(168,85,247,0.3)" },
 }
 
+const winnerLabel = (winner: string | null | undefined) => {
+  if (!winner) return "Draw"
+  if (winner === "player1") return "Player 1 Wins"
+  if (winner === "player2") return "Player 2 Wins"
+  return "Bot Wins"
+}
+
 const SnakesDuelView = forwardRef<View, SnakesDuelViewProps>(
   (
-    { state, mode, selectedSkins, selectedDifficulty, onSelectSkin, onSelectDifficulty, onBack, onReset, onToggleMode },
+    {
+      state,
+      mode,
+      selectedSkins,
+      selectedDifficulty,
+      appleSplashes,
+      onSelectSkin,
+      onSelectDifficulty,
+      onBack,
+      onReset,
+      onToggleMode,
+      onRematch,
+    },
     ref,
   ) => {
     const { width, height } = useWindowDimensions()
@@ -100,6 +121,9 @@ const SnakesDuelView = forwardRef<View, SnakesDuelViewProps>(
       />
     ))
 
+    const showCountdown = state.status === "countdown" && state.countdown
+    const showGameOver = state.status === "gameover"
+
     return (
       <View ref={ref} style={styles.container}>
         <View style={styles.headerRow}>
@@ -117,20 +141,22 @@ const SnakesDuelView = forwardRef<View, SnakesDuelViewProps>(
           </TouchableOpacity>
         </View>
 
-        <View style={styles.difficultyRow}>
-          {DIFFICULTY_OPTIONS.map(({ id, label }) => {
-            const active = selectedDifficulty === id
-            return (
-              <TouchableOpacity
-                key={`difficulty-${id}`}
-                style={[styles.diffChip, active && styles.diffChipActive]}
-                onPress={() => onSelectDifficulty(id)}
-              >
-                <Text style={[styles.diffChipText, active && styles.diffChipTextActive]}>{label}</Text>
-              </TouchableOpacity>
-            )
-          })}
-        </View>
+        {mode === "bot" && (
+          <View style={styles.difficultyRow}>
+            {DIFFICULTY_OPTIONS.map(({ id, label }) => {
+              const active = selectedDifficulty === id
+              return (
+                <TouchableOpacity
+                  key={`difficulty-${id}`}
+                  style={[styles.diffChip, active && styles.diffChipActive]}
+                  onPress={() => onSelectDifficulty(id)}
+                >
+                  <Text style={[styles.diffChipText, active && styles.diffChipTextActive]}>{label}</Text>
+                </TouchableOpacity>
+              )
+            })}
+          </View>
+        )}
 
         <ScrollView
           style={styles.skinRow}
@@ -192,12 +218,49 @@ const SnakesDuelView = forwardRef<View, SnakesDuelViewProps>(
 
             {appleNodes}
 
+            {appleSplashes.map((splash) => (
+              <View
+                key={`splash-${splash.id}`}
+                style={{
+                  position: "absolute",
+                  left: toPixel(splash.x) + cellSize * 0.1,
+                  top: toPixel(splash.y) + cellSize * 0.1,
+                  width: cellSize * 0.8,
+                  height: cellSize * 0.8,
+                  borderRadius: cellSize,
+                  backgroundColor: "rgba(250, 204, 21, 0.45)",
+                  borderWidth: 2,
+                  borderColor: "rgba(217, 119, 6, 0.6)",
+                }}
+              />
+            ))}
+
             {state.snakes.map((snake) => {
               const palette = skinPalette[snake.skin] ?? skinPalette["classic-neon"]
               return snake.segments.map((segment, index) =>
                 renderSnakeSegment(segment, palette.fill, `${snake.id}-${index}`, palette.glow, index === 0),
               )
             })}
+
+            {(showCountdown || showGameOver) && (
+              <View style={styles.overlay}>
+                <Text style={styles.overlayTitle}>
+                  {showCountdown ? state.countdown : winnerLabel(state.winner)}
+                </Text>
+                {showGameOver ? (
+                  <View style={styles.overlayActions}>
+                    <TouchableOpacity style={styles.overlayButtonPrimary} onPress={onRematch}>
+                      <Text style={styles.overlayButtonText}>Rematch</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.overlayButtonSecondary} onPress={onBack}>
+                      <Text style={styles.overlayButtonText}>Menu</Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : (
+                  <Text style={styles.overlaySubtitle}>Round starting…</Text>
+                )}
+              </View>
+            )}
           </View>
         </View>
 
@@ -312,6 +375,51 @@ const styles = StyleSheet.create({
     shadowColor: "#0ea5e9",
     shadowOpacity: 0.2,
     shadowRadius: 12,
+  },
+  overlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(15,23,42,0.75)",
+    justifyContent: "center",
+    alignItems: "center",
+    borderRadius: 18,
+  },
+  overlayTitle: {
+    color: "white",
+    fontSize: 36,
+    fontWeight: "800",
+  },
+  overlaySubtitle: {
+    marginTop: 6,
+    color: "rgba(226,232,240,0.8)",
+    fontSize: 14,
+  },
+  overlayActions: {
+    marginTop: 16,
+    flexDirection: "row",
+    gap: 12,
+  },
+  overlayButtonPrimary: {
+    paddingHorizontal: 22,
+    paddingVertical: 10,
+    borderRadius: 20,
+    backgroundColor: "rgba(59,130,246,0.95)",
+  },
+  overlayButtonSecondary: {
+    paddingHorizontal: 22,
+    paddingVertical: 10,
+    borderRadius: 20,
+    backgroundColor: "rgba(30,41,59,0.85)",
+    borderWidth: 1,
+    borderColor: "rgba(148,163,184,0.6)",
+  },
+  overlayButtonText: {
+    color: "white",
+    fontWeight: "700",
+    fontSize: 14,
   },
   footer: {
     alignItems: "center",

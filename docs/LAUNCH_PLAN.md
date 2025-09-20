@@ -61,6 +61,7 @@
 | 2025-09-20 | T8 Adaptive Pacing/Skins | Added model tick-rate ramp and cosmetic skin selection with persistence.
 | 2025-09-20 | T8 Movement/Collisions | Implemented snake movement loop, collision resolution, and apple respawn; updated specs/QA.
 | 2025-09-20 | T8 Prep Workboard | Defined Snakes Duel prep tasks (grid spec, bot plan, skins brief, skeleton, telemetry).
+| 2025-09-20 | T8 Difficulty UI | Added bot difficulty chips, AI telemetry events, and persistence for Snakes Duel. |
 
 ## Competitive Insights (Notes)
 - Content density: 40ï¿½50 lightweight games with consistent input patterns; prioritize fast load and 1ï¿½3 controls.
@@ -74,107 +75,12 @@
 - T5 polish: monitor goalie fairness after tuning; consider layered cheer FX if players request more hype.
 - T6 polish: run extended rally QA; evaluate adding bot tier for solo mode.
 - T7 Spinner War backlog: evaluate additional power-ups, haptics, and boost balance post QA (T7-A/B/C/D/E completed).
-- T8 Snakes Duel: harden movement/collision loop, finish bot difficulty tuning (rookie/pro/legend), integrate telemetry events, and coordinate skin asset delivery.
+- T8 Snakes Duel: harden movement flow (round restart UI, apple FX), finalise bot difficulty tuning/telemetry, and prepare art handoff deliverables.
 
 ## Notes
 - Session work (this chat): consolidated Ping Pong into MVC; tuned Air Hockey physics (friction 0.9965, damping 0.965, speed caps), ensured goal reset stability.
 - Spinner War: persisted bot difficulty, added cooldown, seasonal arena background, boost UI rings/bars.
 - Air Hockey: rotating goal SFX trio, stored difficulty preference, tighter goalie lane clamp.
 - Ping Pong: clamped spin, raised vertical pace floor, tidied ambience cue timer.
-- Snakes Duel: adaptive grid renderer with skin selection, bot pathfinding helpers wired into controller, movement/collision loop with apple respawn, telemetry hooks captured.
-
-## notes from previous chat:
-Core Runtime Upgrades
-
-GameScreen.tsx:12 now consumes a typed GameMode/GameRuntimeEvent, funnels start/exit through shared callbacks, and hands the registry component a standard prop set (gameId, mode, onExit, onEvent). Hardware/back navigation now toggles the briefing via handleExitGame.
-core/gameRuntime.ts defines the canonical runtime props & event types; core/gameRegistry.ts, games/registerGames.ts, and App.tsx:21 hook everything together.
-Playable titles (games/air-hockey/AirHockeyScreen.tsx, games/tic-tac-toe/TicTacToeScreen.tsx, games/spinner-war/SpinnerWarScreen.tsx, games/ping-pong/PingPongScreen.tsx) now accept the runtime props, dispatch analytics/events via onEvent, and unregister themselves via the new GameEngine.unregisterGame / stopGame(gameId) (see core/GameEngine.ts:54).
-games/manifest.ts + core/gameCatalog.ts feed contexts/GameContext.tsx:13, giving one source of truth for metadata/gating.
-Art & Audio Pipeline Scaffolding
-
-core/assets.ts and core/theme.ts centralise SFX/image manifests and palette choices; utils/AssetLoader.ts:6 now preloads via that manifest, and contexts/SoundContext.tsx:14 pulls background music from it.
-screens/HomeScreen.tsx:20 imports the palette so primary surfaces use palette.midnight/deepBlue, aligning with the forthcoming visual kit. Audit entries (docs/LAUNCH_PLAN.md) now track Foundations â†’ Registry â†’ Runtime â†’ T2 Art/Audio.
-Next Steps (T3 onward)
-
-T3 â€“ Home & Game Selection UX: redesign the Home experience (carousel, categories, tutorial overlay) using the new theme palette + manifest hooks.
-T4 â€“ Tic Tac Toe Deluxe: upgrade AI tiers, add win-line FX, persist scoresâ€”now easy to extend thanks to the unified runtime.
-Continue marching through T5â€“T16 to reach the 95â€¯% parity/launch-ready target (physics polish, new mini-games, monetisation, QA, store assets, etc.).
-No automated tests were run yet; plan to bring a Jest/Detox harness online during T15. Everything is logged in docs/LAUNCH_PLAN.md for ongoing traceability.
-
-T3 (Home & Game Selection UX) is up next. Iâ€™ll start by redesigning the Home experienceâ€”carousel, category chips, tutorial overlay, seasonal bannerâ€”using the shared palette/manifest. Once thatâ€™s in, Iâ€™ll move straight into T4 (Tic Tac Toe Deluxe) for AI polish, win FX, and score persistence, and keep working down the backlog item-by-item. Iâ€™ll log each milestone in docs/LAUNCH_PLAN.md as we go.
-
-Home UX Overhaul (T3)
-
-Rebuilt the landing page (screens/HomeScreen.tsx) around the new theme palette: added a featured-game carousel, live category chips, seasonal banner, premium CTA, recent-play tiles, tutorial overlay (persisted via AsyncStorage), and gating badges for premium / coming-soon titles.
-Centralised asset & colour metadata (core/assets.ts, core/theme.ts) and updated utils/AssetLoader.ts plus contexts/SoundContext.tsx to consume the shared manifests, keeping audio/image preloading consistent across screens.
-Logged the milestone in docs/LAUNCH_PLAN.md so the roadmap now reflects the completed T3 work.
-Tic Tac Toe Deluxe (T4)
-
-Upgraded the model (games/tic-tac-toe/TicTacToeModel.ts) with difficulty-aware bot logic (easy/medium/hard using minimax for hard), a broadcastable state change hook, and minimax-based win detection that leaves the UIâ€™s winningCells intact.
-Enhanced the controller (games/tic-tac-toe/TicTacToeController.ts) with difficulty control, adaptive bot delays, and debounced move scheduling; added persistence + difficulty analytics in TicTacToeScreen.tsx (scores saved/restored via AsyncStorage, runtime events fired on game over and difficulty swaps).
-Polished the view (games/tic-tac-toe/TicTacToeView.tsx) with animated win-line pulses, difficulty chips, updated scoreboard styling, and bot labelling, delivering the expected â€œdeluxeâ€ presentation.
-Recorded the T4 completion in the audit log.
-Next Targets
-
-T5 â€“ Air Hockey Arena: tighten physics, goalie AI, goal FX.
-T6 â€“ Ping Pong Rally: paddle physics, spin mechanic, crowd ambience.
-Continue through T7+ to close the remaining launch backlog.
-Run tests / preview: start Expo (yarn --cwd frontend start) to verify the new Home flow, difficulty toggles, and Tic-Tac-Toe persistence in-device.
-
-Good plan. I audited T5/T6 code, logged gaps, and set next objectives.
-
-What Iâ€™ve done
-
-Launch plan updates:
-Added â€œCompetitive Auditâ€ and â€œT5/T6 Code Reviewâ€ entries to docs/LAUNCH_PLAN.md:41.
-Added a â€œCompetitive Insights (Notes)â€ section with actionable benchmarks.
-Added â€œNext Objectivesâ€ listing precise T5/T6/T7 polish targets.
-Findings (quick)
-
-Air Hockey (T5): Solid physics pass exists in games/air-hockey with friction, wall damping, collision normal reflection, goalie AI prediction. Gaps: more noticeable goal SFX variation, fine-tune paddle influence/friction, ensure difficulty chips fully wired in screen.
-Ping Pong (T6): Two implementations are present:
-games/ping-pong/PingPongGame.tsx: implements bounce-angle-by-hit-position and paddle-hit SFX, but seems to be a standalone view/game loop.
-games/ping-pong/PingPongController.ts (contains model class): simpler axis flips, no spin mechanic, fixed speeds. Needs consolidation and spin/crowd ambience features.
-Spinner War (T7): Files exist but need arena physics tuning, power-ups, and impact FX.
-Next steps Iâ€™ll tackle (small, focused patches)
-
-Air Hockey polish (T5):
-Expose goal SFX variations via SoundContext and trigger in AirHockeyModel.handleGoal.
-Slightly adjust paddleInfluence and friction for crisper rebounds.
-Confirm difficulty chips from AirHockeyView.tsx propagate to controller (if any wiring gap in Screen).
-Ping Pong upgrades (T6):
-Unify to one flow (prefer the controller+model+view pattern).
-Add spin: modulate outgoing angle by paddle vertical movement at impact; add spin decay.
-Add looping crowd ambience with start/stop hooks in View; ensure volume control via SoundContext.
-Improve rally tracking and feedback (subtle flash/haptic on long rallies).
-Spinner War (T7):
-Arena friction and edge knockback in model.
-Simple timed power-up (speed boost, weight) and burst FX trigger in view.
-Quick question (to align before I start patching)
-
-For Ping Pong, should I retire the standalone PingPongGame.tsx in favor of Controller/Model/View pattern, or keep both and link one as the active Screen? If you prefer consolidation, Iâ€™ll remove the redundant file and update PingPongScreen.tsx to the MVC version.
-If that sounds good, Iâ€™ll proceed with:
-
-T5: add goal SFX variety + tweak physics.
-T6: consolidate to MVC and implement spin + ambience.
-T7: core arena physics + one basic power-up.
-Iâ€™ll keep updating docs/LAUNCH_PLAN.md after each patch so progress is preserved.
-
-Confirmed. I removed the redundant PingPongGame.tsx and kept the MVC pattern in place.
-
-Changes made
-
-Deleted games/ping-pong/PingPongGame.tsx.
-Verified games/ping-pong/PingPongScreen.tsx already implements a full MVC-like flow with state, inputs, bot logic, and SFX. No changes needed there yet.
-Minor annotation tweak in games/ping-pong/PingPongController.ts to clarify the model is kept.
-Updated log in docs/LAUNCH_PLAN.md:43 to record the T6 cleanup.
-Next steps (as agreed)
-
-Air Hockey (T5): add goal SFX variety, tune friction/paddle influence, confirm difficulty chips wiring from View to Controller.
-Ping Pong (T6): keep MVC Screen; add explicit spin param and decay, crowd ambience loop via SoundContext, rally polish.
-Spinner War (T7): core arena physics + one basic power-up + burst FX.
-Iâ€™ll update docs/LAUNCH_PLAN.md after each patch so progress is captured.
-Shall I proceed with the Air Hockey physics + AI polish next?
-- Snakes Duel: drafted pathfinding helpers (A*, flood-fill) and captured next integration steps.
-
+- Snakes Duel: adaptive grid renderer with skin selection, countdown/restart overlays, full movement & collision loop, Rookie/Pro/Legend bot tuning, and telemetry events wired to analytics.
 
