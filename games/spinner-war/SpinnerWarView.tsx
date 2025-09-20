@@ -1,8 +1,15 @@
 import React, { forwardRef, useImperativeHandle, useMemo, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ImageBackground, Image, Animated } from 'react-native';
 import { useSeasonal } from '../../contexts/SeasonalContext';
+import { AssetLoader } from '../../utils/AssetLoader';
+import { particleManifest } from '../../core/assets';
 import { SpinnerWarState, Spinner } from './SpinnerWarModel';
 import { Ionicons } from '@expo/vector-icons';
+
+const AnimatedImage = Animated.createAnimatedComponent(Image);
+const POWERUP_ICON_MAP: Record<string, number> = {
+  speed: require('../../assets/images/spinner-war/boost-1.png'),
+};
 
 interface SpinnerWarViewProps {
   state: SpinnerWarState;
@@ -24,6 +31,16 @@ export const SpinnerWarView = forwardRef(({
   onReset,
   onPress
 }: SpinnerWarViewProps, ref: React.Ref<{ triggerImpact(): void }>) => {
+  const assetLoader = useMemo(() => AssetLoader.getInstance(), [])
+  const impactBurst = useMemo(() => {
+    const module = particleManifest['spinner-war-impact']
+    return module ? assetLoader.getImage(module) ?? module : null
+  }, [assetLoader])
+  const powerUpSprite = useMemo(() => {
+    const type = state.powerUp?.type ?? 'speed'
+    const module = POWERUP_ICON_MAP[type] ?? POWERUP_ICON_MAP['speed']
+    return assetLoader.getImage(module) ?? module
+  }, [assetLoader, state.powerUp?.type])
   const burstScale = useRef(new Animated.Value(0)).current
   const shake = useRef(new Animated.Value(0)).current
   const triggerBurst = () => {
@@ -129,10 +146,35 @@ export const SpinnerWarView = forwardRef(({
 
         <Animated.View style={[styles.gameArea, { transform: [{ translateX: shake.interpolate({ inputRange: [0,1], outputRange: [0, 6] }) }] }]}>
           <View style={[styles.arena, {width: state.areaRadius * 2, height: state.areaRadius * 2, borderRadius: state.areaRadius}]} />
-          {state.powerUp && (
-            <View style={[styles.powerUp, { left: state.powerUp.x - state.powerUp.radius, top: state.powerUp.y - state.powerUp.radius, width: state.powerUp.radius * 2, height: state.powerUp.radius * 2 }]} />
+          {state.powerUp && powerUpSprite && (
+            <Image
+              source={powerUpSprite}
+              style={[
+                styles.powerUp,
+                {
+                  left: state.powerUp.x - state.powerUp.radius,
+                  top: state.powerUp.y - state.powerUp.radius,
+                  width: state.powerUp.radius * 2,
+                  height: state.powerUp.radius * 2,
+                },
+              ]}
+              resizeMode="contain"
+            />
           )}
-          <Animated.View pointerEvents="none" style={[styles.burstOverlay, { opacity: burstScale, transform: [{ scale: burstScale.interpolate({ inputRange: [0,1], outputRange: [1, 1.08] }) }] }]} />
+          {impactBurst && (
+            <AnimatedImage
+              pointerEvents="none"
+              source={impactBurst}
+              style={[
+                styles.burstOverlay,
+                {
+                  opacity: burstScale.interpolate({ inputRange: [0, 1], outputRange: [0, 0.9] }),
+                  transform: [{ scale: burstScale.interpolate({ inputRange: [0, 1], outputRange: [0.6, 1.3] }) }],
+                },
+              ]}
+              resizeMode="cover"
+            />
+          )}
           {renderSpinner(state.player1, 'player1')}
           {renderSpinner(state.player2, 'player2')}
           {(state.boosts.player1 > 1.02 || state.boosts.player2 > 1.02) && (
@@ -223,14 +265,10 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(255,255,255,0.08)'
   },
   powerUp: {
     position: 'absolute',
-    backgroundColor: 'rgba(34,197,94,0.85)',
-    borderRadius: 999,
-    borderWidth: 2,
-    borderColor: 'white',
+    zIndex: 12,
   },
   boostRing: {
     position: 'absolute',

@@ -1,7 +1,10 @@
-﻿import React, { forwardRef, useMemo } from "react"
-import { View, Text, StyleSheet, TouchableOpacity, useWindowDimensions, ScrollView } from "react-native"
+import React, { forwardRef, useMemo } from "react"
+import { View, Text, StyleSheet, TouchableOpacity, useWindowDimensions, ScrollView, Image } from "react-native"
 
-import type { SnakesDuelState, SnakeSegment } from "./SnakesDuelModel"
+import { useSeasonal } from "../../contexts/SeasonalContext"
+import { AssetLoader } from "../../utils/AssetLoader"
+import { particleManifest } from "../../core/assets"
+import type { SnakesDuelState, SnakeSegment, SnakeRuntime } from "./SnakesDuelModel"
 
 interface SnakesDuelViewProps {
   state: SnakesDuelState
@@ -30,7 +33,7 @@ const DIFFICULTY_OPTIONS: Array<{ id: "rookie" | "pro" | "legend"; label: string
   { id: "legend", label: "Legend" },
 ]
 
-const skinPalette: Record<string, { fill: string; glow: string }> = {
+const BASE_SKIN_PALETTE: Record<string, { fill: string; glow: string }> = {
   "classic-neon": { fill: "#22c55e", glow: "rgba(34,197,94,0.3)" },
   "sunset-blaze": { fill: "#f97316", glow: "rgba(249,115,22,0.3)" },
   "arctic-pulse": { fill: "#38bdf8", glow: "rgba(56,189,248,0.3)" },
@@ -42,6 +45,70 @@ const winnerLabel = (winner: string | null | undefined) => {
   if (winner === "player1") return "Player 1 Wins"
   if (winner === "player2") return "Player 2 Wins"
   return "Bot Wins"
+}
+
+const directionToAngle: Record<SnakeRuntime["direction"], number> = {
+  up: 0,
+  right: 90,
+  down: 180,
+  left: 270,
+}
+
+type SegmentKind = "head" | "body" | "turn" | "tail"
+
+type SegmentOrientation = {
+  kind: SegmentKind
+  rotation: number
+}
+
+const vectorToDirection = (dx: number, dy: number): SnakeRuntime["direction"] => {
+  if (dx === 1) return "right"
+  if (dx === -1) return "left"
+  if (dy === 1) return "down"
+  if (dy === -1) return "up"
+  return "up"
+}
+
+const turnRotationMap: Record<string, number> = {
+  "up-right": 0,
+  "right-up": 0,
+  "right-down": 90,
+  "down-right": 90,
+  "down-left": 180,
+  "left-down": 180,
+  "left-up": 270,
+  "up-left": 270,
+}
+
+const resolveSegmentOrientation = (snake: SnakeRuntime, index: number): SegmentOrientation => {
+  const segments = snake.segments
+
+  if (index === 0) {
+    return { kind: "head", rotation: directionToAngle[snake.direction] }
+  }
+
+  if (index === segments.length - 1) {
+    const prev = segments[index - 1]
+    const segment = segments[index]
+    const direction = vectorToDirection(segment.x - prev.x, segment.y - prev.y)
+    return { kind: "tail", rotation: directionToAngle[direction] }
+  }
+
+  const prev = segments[index - 1]
+  const segment = segments[index]
+  const next = segments[index + 1]
+
+  const incoming = vectorToDirection(segment.x - prev.x, segment.y - prev.y)
+  const outgoing = vectorToDirection(next.x - segment.x, next.y - segment.y)
+
+  if (incoming === outgoing) {
+    const rotation = incoming === "left" || incoming === "right" ? 90 : 0
+    return { kind: "body", rotation }
+  }
+
+  const key = `${incoming}-${outgoing}`
+  const rotation = turnRotationMap[key] ?? 0
+  return { kind: "turn", rotation }
 }
 
 const SnakesDuelView = forwardRef<View, SnakesDuelViewProps>(
@@ -83,43 +150,107 @@ const SnakesDuelView = forwardRef<View, SnakesDuelViewProps>(
       [boardWidth, boardHeight],
     )
 
-    const toPixel = (value: number) => value * (cellSize + gutter)
+    const { getSnakesDuelTheme } = useSeasonal()
+    const seasonalSnakeTheme = useMemo(() => getSnakesDuelTheme(), [getSnakesDuelTheme])
+    const skinPalette = useMemo(
+      () => ({
+        ...BASE_SKIN_PALETTE,
+        "classic-neon": seasonalSnakeTheme.palette,
+      }),
+      [seasonalSnakeTheme],
+    )
+    const appleFill = seasonalSnakeTheme.palette.fill
+    const appleGlow = seasonalSnakeTheme.palette.glow
 
-    const renderSnakeSegment = (segment: SnakeSegment, color: string, key: string, glow: string, isHead: boolean) => (
-      <View
-        key={key}
-        style={{
-          position: "absolute",
-          left: toPixel(segment.x),
-          top: toPixel(segment.y),
-          width: cellSize,
-          height: cellSize,
-          borderRadius: 6,
-          backgroundColor: isHead ? color : `${color}dd`,
-          shadowColor: glow,
-          shadowOpacity: 0.6,
-          shadowRadius: 8,
-        }}
-      />
+    const assetLoader = useMemo(() => AssetLoader.getInstance(), [])
+    const textures = seasonalSnakeTheme.textures
+    const textureSources = useMemo<Record<SegmentKind, any>>(
+      () => ({
+        head: assetLoader.getImage(textures.head) ?? textures.head,
+        body: assetLoader.getImage(textures.body) ?? textures.body,
+        turn: assetLoader.getImage(textures.turn) ?? textures.turn,
+        tail: assetLoader.getImage(textures.tail) ?? textures.tail,
+      }),
+      [assetLoader, textures.head, textures.body, textures.turn, textures.tail],
     )
 
-    const appleNodes = state.apples.map((apple, index) => (
-      <View
-        key={`apple-${index}`}
-        style={{
-          position: "absolute",
-          left: toPixel(apple.x) + cellSize * 0.2,
-          top: toPixel(apple.y) + cellSize * 0.2,
-          width: cellSize * 0.6,
-          height: cellSize * 0.6,
-          borderRadius: cellSize,
-          backgroundColor: "#facc15",
-          shadowColor: "#facc15",
-          shadowOpacity: 0.45,
-          shadowRadius: 6,
-        }}
-      />
-    ))
+    const gridSource = useMemo(() => assetLoader.getImage(textures.grid) ?? textures.grid, [assetLoader, textures.grid])
+    const appleSprite = useMemo(
+      () => assetLoader.getImage(textures.apple) ?? textures.apple,
+      [assetLoader, textures.apple],
+    )
+
+    const particleSource = useMemo(() => {
+      const module = particleManifest[seasonalSnakeTheme.particle]
+      if (!module) return null
+      return assetLoader.getImage(module) ?? module
+    }, [assetLoader, seasonalSnakeTheme.particle])
+
+    const toPixel = (value: number) => value * (cellSize + gutter)
+    const particleSize = Math.max(cellSize * 1.35, 28)
+    const particleOffset = (particleSize - cellSize) / 2
+
+    const renderSnakeSegment = (
+      snake: SnakeRuntime,
+      segment: SnakeSegment,
+      index: number,
+      palette: { fill: string; glow: string },
+    ) => {
+      const { kind, rotation } = resolveSegmentOrientation(snake, index)
+      const source = textureSources[kind]
+
+      return (
+        <Image
+          key={`${snake.id}-${index}`}
+          source={source}
+          style={{
+            position: "absolute",
+            left: toPixel(segment.x),
+            top: toPixel(segment.y),
+            width: cellSize,
+            height: cellSize,
+            resizeMode: "contain",
+            shadowColor: palette.glow,
+            shadowOpacity: 0.55,
+            shadowRadius: 8,
+            transform: [{ rotate: `${rotation}deg` }],
+          }}
+        />
+      )
+    }
+
+    const appleNodes = appleSprite
+      ? state.apples.map((apple, index) => (
+          <Image
+            key={`apple-${index}`}
+            source={appleSprite}
+            style={{
+              position: "absolute",
+              left: toPixel(apple.x) + cellSize * 0.1,
+              top: toPixel(apple.y) + cellSize * 0.1,
+              width: cellSize * 0.8,
+              height: cellSize * 0.8,
+              resizeMode: "contain",
+            }}
+          />
+        ))
+      : state.apples.map((apple, index) => (
+          <View
+            key={`apple-${index}`}
+            style={{
+              position: "absolute",
+              left: toPixel(apple.x) + cellSize * 0.2,
+              top: toPixel(apple.y) + cellSize * 0.2,
+              width: cellSize * 0.6,
+              height: cellSize * 0.6,
+              borderRadius: cellSize,
+              backgroundColor: appleFill,
+              shadowColor: appleFill,
+              shadowOpacity: 0.45,
+              shadowRadius: 6,
+            }}
+          />
+        ))
 
     const showCountdown = state.status === "countdown" && state.countdown
     const showGameOver = state.status === "gameover"
@@ -172,7 +303,7 @@ const SnakesDuelView = forwardRef<View, SnakesDuelViewProps>(
                 style={[styles.skinChip, isSelected && styles.skinChipActive]}
                 onPress={() => onSelectSkin("player1", option.id)}
               >
-                <Text style={[styles.skinChipLabel, isSelected && styles.skinChipLabelActive]}>{`P1 · ${option.label}`}</Text>
+                <Text style={[styles.skinChipLabel, isSelected && styles.skinChipLabelActive]}>{`P1 - ${option.label}`}</Text>
               </TouchableOpacity>
             )
           })}
@@ -184,14 +315,21 @@ const SnakesDuelView = forwardRef<View, SnakesDuelViewProps>(
                 style={[styles.skinChip, isSelected && styles.skinChipActive]}
                 onPress={() => onSelectSkin("player2", option.id)}
               >
-                <Text style={[styles.skinChipLabel, isSelected && styles.skinChipLabelActive]}>{`P2 · ${option.label}`}</Text>
+                <Text style={[styles.skinChipLabel, isSelected && styles.skinChipLabelActive]}>{`P2 - ${option.label}`}</Text>
               </TouchableOpacity>
             )
           })}
         </ScrollView>
 
         <View style={styles.boardWrapper}>
-          <View style={[styles.board, boardStyle]}>
+          <View style={[styles.board, boardStyle, { shadowColor: appleFill }]}>
+            {gridSource && (
+              <Image
+                source={gridSource}
+                style={[styles.gridImage, { width: boardWidth, height: boardHeight }]}
+                resizeMode="cover"
+              />
+            )}
             {state.grid.map((_, rowIndex) => (
               <View
                 key={`row-${rowIndex}`}
@@ -218,27 +356,42 @@ const SnakesDuelView = forwardRef<View, SnakesDuelViewProps>(
 
             {appleNodes}
 
-            {appleSplashes.map((splash) => (
-              <View
-                key={`splash-${splash.id}`}
-                style={{
-                  position: "absolute",
-                  left: toPixel(splash.x) + cellSize * 0.1,
-                  top: toPixel(splash.y) + cellSize * 0.1,
-                  width: cellSize * 0.8,
-                  height: cellSize * 0.8,
-                  borderRadius: cellSize,
-                  backgroundColor: "rgba(250, 204, 21, 0.45)",
-                  borderWidth: 2,
-                  borderColor: "rgba(217, 119, 6, 0.6)",
-                }}
-              />
-            ))}
+            {appleSplashes.map((splash) =>
+              particleSource ? (
+                <Image
+                  key={`splash-${splash.id}`}
+                  source={particleSource}
+                  style={{
+                    position: "absolute",
+                    left: toPixel(splash.x) - particleOffset,
+                    top: toPixel(splash.y) - particleOffset,
+                    width: particleSize,
+                    height: particleSize,
+                    resizeMode: "contain",
+                  }}
+                />
+              ) : (
+                <View
+                  key={`splash-${splash.id}`}
+                  style={{
+                    position: "absolute",
+                    left: toPixel(splash.x) + cellSize * 0.1,
+                    top: toPixel(splash.y) + cellSize * 0.1,
+                    width: cellSize * 0.8,
+                    height: cellSize * 0.8,
+                    borderRadius: cellSize,
+                    backgroundColor: appleGlow,
+                    borderWidth: 2,
+                    borderColor: appleFill,
+                  }}
+                />
+              ),
+            )}
 
             {state.snakes.map((snake) => {
               const palette = skinPalette[snake.skin] ?? skinPalette["classic-neon"]
               return snake.segments.map((segment, index) =>
-                renderSnakeSegment(segment, palette.fill, `${snake.id}-${index}`, palette.glow, index === 0),
+                renderSnakeSegment(snake, segment, index, palette),
               )
             })}
 
@@ -257,7 +410,7 @@ const SnakesDuelView = forwardRef<View, SnakesDuelViewProps>(
                     </TouchableOpacity>
                   </View>
                 ) : (
-                  <Text style={styles.overlaySubtitle}>Round starting…</Text>
+                  <Text style={styles.overlaySubtitle}>Round starting...</Text>
                 )}
               </View>
             )}
@@ -266,7 +419,7 @@ const SnakesDuelView = forwardRef<View, SnakesDuelViewProps>(
 
         <View style={styles.footer}>
           <Text style={styles.footerText}>
-            Tick Rate: {state.tickRate.toFixed(1)} • Status: {state.status.toUpperCase()}
+            Tick Rate: {state.tickRate.toFixed(1)} | Status: {state.status.toUpperCase()}
           </Text>
         </View>
       </View>
@@ -375,7 +528,17 @@ const styles = StyleSheet.create({
     shadowColor: "#0ea5e9",
     shadowOpacity: 0.2,
     shadowRadius: 12,
+    overflow: "hidden",
   },
+  gridImage: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    opacity: 0.92,
+  },
+
   overlay: {
     position: "absolute",
     top: 0,
@@ -431,3 +594,4 @@ const styles = StyleSheet.create({
 })
 
 export default SnakesDuelView
+

@@ -2,7 +2,7 @@
 
 import type React from "react"
 import { useEffect, useMemo, useRef } from "react"
-import { View, StyleSheet, Animated, Text, TouchableOpacity, ImageBackground } from "react-native"
+import { View, StyleSheet, Animated, Text, TouchableOpacity, ImageBackground, Image } from "react-native"
 import { LinearGradient } from "expo-linear-gradient"
 import { Ionicons } from "@expo/vector-icons"
 
@@ -10,6 +10,8 @@ import type { AirHockeyState } from "./AirHockeyModel"
 import type { GameView } from "../../core/GameEngine"
 import type { AirHockeyDifficulty } from "./AirHockeyController"
 import { useSeasonal } from "../../contexts/SeasonalContext"
+import { AssetLoader } from "../../utils/AssetLoader"
+import { particleManifest } from "../../core/assets"
 import { useSound } from "../../contexts/SoundContext"
 
 interface AirHockeyViewProps {
@@ -23,6 +25,8 @@ interface AirHockeyViewProps {
   player1PanHandlers: any
   player2PanHandlers: any
 }
+
+const AnimatedImage = Animated.createAnimatedComponent(Image)
 
 const difficultyLabels: Record<AirHockeyDifficulty, string> = {
   rookie: "Rookie",
@@ -43,6 +47,16 @@ export const AirHockeyView: React.FC<AirHockeyViewProps> & GameView = ({
 }) => {
   const { getSeasonalGameBackground } = useSeasonal()
   const { playSound } = useSound()
+
+  const assetLoader = useMemo(() => AssetLoader.getInstance(), [])
+  const goalLightSource = useMemo(() => {
+    const module = particleManifest["air-hockey-goal-light"]
+    return module ? assetLoader.getImage(module) ?? module : null
+  }, [assetLoader])
+  const puckTrailSource = useMemo(() => {
+    const module = particleManifest["air-hockey-puck-trail"]
+    return module ? assetLoader.getImage(module) ?? module : null
+  }, [assetLoader])
 
   const player1Position = useRef(
     new Animated.ValueXY({
@@ -169,19 +183,23 @@ export const AirHockeyView: React.FC<AirHockeyViewProps> & GameView = ({
 
       <View style={styles.boardWrapper}>
         <ImageBackground source={backgroundImage} style={styles.boardBackground}>
-          <Animated.View
-            pointerEvents="none"
-            style={[
-              styles.goalFlash,
-              {
-                opacity: goalFlashAnim,
-                backgroundColor:
-                  lastGoal === "player1"
-                    ? "rgba(59, 130, 246, 0.35)"
-                    : "rgba(249, 115, 22, 0.35)",
-              },
-            ]}
-          />
+          {goalLightSource && (
+            <AnimatedImage
+              pointerEvents="none"
+              source={goalLightSource}
+              style={[
+                styles.goalFlash,
+                {
+                  opacity: goalFlashAnim,
+                  tintColor:
+                    lastGoal === "player1"
+                      ? "rgba(59,130,246,0.85)"
+                      : "rgba(249,115,22,0.85)",
+                },
+              ]}
+              resizeMode="cover"
+            />
+          )}
 
           <Animated.View
             style={[
@@ -413,6 +431,10 @@ const styles = StyleSheet.create({
   },
   player2Paddle: {
     backgroundColor: "#38bdf8",
+  },
+  puckTrail: {
+    position: "absolute",
+    opacity: 0.8,
   },
   puck: {
     position: "absolute",

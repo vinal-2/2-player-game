@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import {
   View,
   Text,
@@ -34,9 +34,27 @@ const easeTowards = (current: number, target: number, factor: number) => current
 
 const PingPongScreen: React.FC<GameRuntimeProps> = ({ gameId, mode, onExit, onEvent }) => {
   const { playSound } = useSound()
+  const { trackEvent } = useAnalytics()
+  const { getSeasonalGameBackground } = useSeasonal()
+  const assetLoader = useMemo(() => AssetLoader.getInstance(), [])
   // crowd ambience cue timer
   const crowdCueTimer = useRef<NodeJS.Timeout | null>(null)
-  const { trackEvent } = useAnalytics()
+
+  const crowdBackdropFar = useMemo(
+    () => assetLoader.getImage(require("../../assets/images/ping-pong/crowd-layer-far.png")) ?? require("../../assets/images/ping-pong/crowd-layer-far.png"),
+    [assetLoader],
+  )
+
+  const crowdBackdropNear = useMemo(
+    () => assetLoader.getImage(require("../../assets/images/ping-pong/crowd-layer-near.png")) ?? require("../../assets/images/ping-pong/crowd-layer-near.png"),
+    [assetLoader],
+  )
+
+  const boardSurface = useMemo(
+    () => getSeasonalGameBackground("ping-pong") ?? require("../../assets/images/ping-pong/table-spring.png"),
+    [getSeasonalGameBackground],
+  )
+
 
   const [scores, setScores] = useState({ player1: 0, player2: 0 })
   const [gameActive, setGameActive] = useState(true)
@@ -306,7 +324,7 @@ const PingPongScreen: React.FC<GameRuntimeProps> = ({ gameId, mode, onExit, onEv
   }
 
   return (
-    <ImageBackground source={require("../../assets/images/ping-pong-bg.png")} style={styles.background}>
+    <ImageBackground source={crowdBackdropFar} style={styles.background}>
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.scoreRow}>
           <View style={styles.scoreCapsule}>
@@ -330,7 +348,8 @@ const PingPongScreen: React.FC<GameRuntimeProps> = ({ gameId, mode, onExit, onEv
         </View>
 
         <View style={styles.boardContainer}>
-          <View style={styles.board}>
+          <ImageBackground source={boardSurface} style={styles.board} imageStyle={styles.boardImage}>
+            <Image source={crowdBackdropNear} style={styles.crowdLayerNear} resizeMode="cover" />
             <View style={styles.net} />
 
             <Animated.View
@@ -365,7 +384,7 @@ const PingPongScreen: React.FC<GameRuntimeProps> = ({ gameId, mode, onExit, onEv
                 { transform: ballPosition.getTranslateTransform(), width: BALL_SIZE, height: BALL_SIZE },
               ]}
             />
-          </View>
+          </ImageBackground>
         </View>
 
         {winnerBanner && (
@@ -446,6 +465,17 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     borderWidth: 4,
     borderColor: "rgba(255,255,255,0.2)",
+  },
+  boardImage: {
+    borderRadius: 20,
+  },
+  crowdLayerNear: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: "30%",
+    opacity: 0.85,
   },
   net: {
     position: "absolute",

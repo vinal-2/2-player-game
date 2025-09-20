@@ -8,6 +8,7 @@ import {
   TouchableOpacity,
   FlatList,
   Image,
+  ImageBackground,
   Dimensions,
   StatusBar,
   Animated,
@@ -35,11 +36,21 @@ const FEATURE_WIDTH = width * 0.72
 const FEATURE_HEIGHT = FEATURE_WIDTH * 0.55
 const TUTORIAL_STORAGE_KEY = "home-tutorial-dismissed"
 
+const CATEGORY_ICONS: Record<string, number> = {
+  board: require("../assets/images/home/categories/board.png"),
+  puzzle: require("../assets/images/home/categories/puzzle.png"),
+  reflex: require("../assets/images/home/categories/reflex.png"),
+  sports: require("../assets/images/home/categories/sports.png"),
+}
+
+const DEFAULT_CATEGORY_ICON = require("../assets/images/ui/icon-star-128.png")
+
+
 const HomeScreen = ({ navigation }) => {
   const { games, recentlyPlayed, addToRecentlyPlayed, getGameById } = useGame()
   const { playSound } = useSound()
   const { isPremium, adModalVisible, timeUntilNextAd } = useAd()
-  const { seasonalTheme, activeEvent } = useSeasonal()
+  const { seasonalTheme, activeEvent, currentSeason, getHomeArtwork } = useSeasonal()
   const { trackEvent } = useAnalytics()
 
   const [searchQuery, setSearchQuery] = useState("")
@@ -47,6 +58,7 @@ const HomeScreen = ({ navigation }) => {
   const [filteredGames, setFilteredGames] = useState(games)
   const [tutorialVisible, setTutorialVisible] = useState(false)
   const bounceAnim = useRef(new Animated.Value(1)).current
+  const homeArtwork = useMemo(() => getHomeArtwork(), [getHomeArtwork])
 
   const playableGames = useMemo(
     () => games.filter((game) => game.status === "playable"),
@@ -307,6 +319,20 @@ const HomeScreen = ({ navigation }) => {
             </LinearGradient>
           )}
 
+          <View style={styles.heroSection}>
+            <ImageBackground
+              source={homeArtwork.banner}
+              style={styles.heroBackground}
+              imageStyle={styles.heroBackgroundImage}
+            >
+              <Image source={homeArtwork.hero} style={styles.heroArtwork} resizeMode="cover" />
+              <View style={styles.heroOverlay}>
+                <Text style={styles.heroTag}>{currentSeason.toUpperCase()} Spotlight</Text>
+                <Text style={styles.heroTitle}>Fresh seasonal boards & FX ready to play</Text>
+              </View>
+            </ImageBackground>
+          </View>
+
           <View style={styles.searchRow}>
             <View style={styles.searchContainer}>
               <Ionicons name="search" size={18} color="rgba(255,255,255,0.6)" />
@@ -360,9 +386,20 @@ const HomeScreen = ({ navigation }) => {
                     setSelectedCategory(category)
                   }}
                 >
-                  <Text style={[styles.categoryText, isActive && styles.categoryTextActive]}>
-                    {category === "all" ? "All Games" : category.replace(/\b\w/g, (c) => c.toUpperCase())}
-                  </Text>
+                  <View style={styles.categoryChipContent}>
+                    {category === "all" ? (
+                      <Ionicons name="apps" size={16} color="white" />
+                    ) : (
+                      <Image
+                        source={CATEGORY_ICONS[category.toLowerCase()] ?? DEFAULT_CATEGORY_ICON}
+                        style={styles.categoryIcon}
+                        resizeMode="contain"
+                      />
+                    )}
+                    <Text style={[styles.categoryText, isActive && styles.categoryTextActive]}>
+                      {category === "all" ? "All Games" : category.replace(/\b\w/g, (c) => c.toUpperCase())}
+                    </Text>
+                  </View>
                 </Pressable>
               )
             })}
@@ -571,19 +608,66 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     fontSize: 12,
   },
+  heroSection: {
+    marginHorizontal: 20,
+    marginBottom: 16,
+  },
+  heroBackground: {
+    borderRadius: 24,
+    overflow: "hidden",
+  },
+  heroBackgroundImage: {
+    borderRadius: 24,
+  },
+  heroArtwork: {
+    width: "100%",
+    height: 160,
+  },
+  heroOverlay: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    paddingHorizontal: 18,
+    paddingVertical: 16,
+    backgroundColor: "rgba(15,23,42,0.55)",
+  },
+  heroTag: {
+    color: "rgba(255,255,255,0.85)",
+    fontSize: 12,
+    fontWeight: "700",
+    letterSpacing: 0.6,
+    marginBottom: 4,
+  },
+  heroTitle: {
+    color: "white",
+    fontSize: 18,
+    fontWeight: "700",
+  },
   categoriesRow: {
     paddingHorizontal: 20,
     paddingBottom: 12,
+    flexDirection: "row",
+    alignItems: "center",
   },
   categoryChip: {
-    backgroundColor: "rgba(255,255,255,0.1)",
+    backgroundColor: "rgba(255,255,255,0.12)",
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 18,
     marginRight: 12,
   },
   categoryChipActive: {
-    backgroundColor: "white",
+    backgroundColor: "rgba(59,130,246,0.85)",
+  },
+  categoryChipContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  categoryIcon: {
+    width: 18,
+    height: 18,
   },
   categoryText: {
     color: "rgba(255,255,255,0.75)",
@@ -591,7 +675,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
   categoryTextActive: {
-    color: palette.midnight,
+    color: "white",
   },
   section: {
     marginTop: 12,

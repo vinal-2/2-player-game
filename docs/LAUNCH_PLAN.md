@@ -1,5 +1,5 @@
-﻿# Mobile Launch Roadmap & Audit Log
- LAUNCH_PLAN.md is in place with the roadmap plus an audit log that already records the foundation work (context cleanâ€‘up, Home/Game gating, asset loader hardening) and the new registry step we just completed.
+# Mobile Launch Roadmap & Audit Log
+ LAUNCH_PLAN.md is in place with the roadmap plus an audit log that already records the foundation work (context clean‑up, Home/Game gating, asset loader hardening) and the new registry step we just completed.
 
 ## Vision & Scope
 - Deliver a polished mobile-only two-player party collection that stands shoulder to shoulder with JindoBlu?s ?Two Player Games : The Challenge?.
@@ -65,27 +65,115 @@
 | 2025-09-20 | Spinner War Fixes | Removed stray module identifiers, enabled reset handling, honoured initial VS Bot mode, and added mode/difficulty highlights. |
 | 2025-09-20 | T8 Snakes Polish | Added apple splash FX with haptics, rematch overlay controls, AI telemetry escape event, and art handoff checklist. |
 | 2025-09-20 | T9 Kickoff | Added Penalty Kicks spec, placeholder runtime, and registry entry. |
-
+| 2025-09-20 | T8 Seasonal Integration | Exposed Snakes Duel seasonal textures/palettes via SeasonalContext and updated view to consume seasonal colors. |
+| 2025-09-20 | T8 Textured Renderer | Swapped Snakes Duel grid segments for seasonal sprites and particle FX via AssetLoader. |
 ## Competitive Insights (Notes)
-- Content density: 40ï¿½50 lightweight games with consistent input patterns; prioritize fast load and 1ï¿½3 controls.
+| 2025-09-20 | T1�T9 Asset Drop | Imported pack into assets/images and assets/particles; updated core/assets.ts imageManifest to preload all new art/FX. |
+- Content density: 40�50 lightweight games with consistent input patterns; prioritize fast load and 1�3 controls.
 - Session design: best-of scoring, instant rematch, no login, offline play works fully.
 - Presentation: playful SFX per hit/score, subtle crowd loop, confetti/flash on goals, haptics on key moments.
 - UX: large touch targets, mirrored controls for top/bottom players, color-coded sides.
 - Monetisation: interstitials between rounds, rewarded opts for cosmetics; premium removes ads.
 - Compliance: clear privacy policy, ad consent (UMP), child-safe defaults, analytics minimal.
 
+## Asset Generator Prompts (T1�T9)
+
+- Global Style
+  - Visual: playful, flat-shaded with soft glow and subtle depth; no photorealism; crisp silhouettes; high readability on small screens.
+  - Background: use generous negative space; avoid busy textures behind gameplay zones.
+  - File: PNG with alpha, sRGB, no text, no drop shadows baked into backgrounds (shadows may be in FX sprites).
+  - Safe areas: keep critical content >24px from edges at 1080�1920; include 48px bleed for hero/banners.
+  - Dimensions: provide at least 1920�1080 (landscape). For icons/particles, see item-specific sizes below.
+  - Color theming tokens (SeasonalContext):
+    - Spring: primary #4CAF50, secondary #8BC34A, bg #E8F5E9, accent #FF9800; snake fill #22c55e.
+    - Summer: primary #03A9F4, secondary #00BCD4, bg #E1F5FE, accent #FF5722; snake fill #fde047.
+    - Autumn: primary #FF9800, secondary #F57C00, bg #FFF3E0, accent #795548; snake fill #f97316.
+    - Winter: primary #3F51B5, secondary #5C6BC0, bg #E8EAF6, accent #E91E63; snake fill #38bdf8.
+  - Naming: kebab-case, include variant (e.g., `hero-classic.png`, `boost-pickup-speed.png`).
+  - Placement: see per-task folders; all must be added to `core/assets.ts` manifests after delivery.
+
+- T1 Core Framework
+  - Prompt: �Minimal mobile UI chrome (top/bottom bars, panel backgrounds) in flat playful style. Transparent PNG, no text labels, rounded corners 16�24px radius. Colors neutral slate with subtle glow accents.�
+  - Size/format: panels at 1600�320 and 1200�400; store in `assets/images/ui/`.
+
+- T2 Shared Art & Icons
+  - Prompt: �Icon set for buttons/toggles (play, settings, back, trophy, star). Flat vector-like, 2-color max plus alpha, match seasonal palette accents. Transparent PNG.�
+  - Sizes: 256�256 base; export 128�128 if needed. Folder `assets/images/ui/`.
+
+- T3 Home & Selection
+  - Hero banner prompt: �Wide hero illustration for party games; bold shapes, flat shading, center-weighted composition, leave edges clean for UI. Seasonal variants using palette tokens.�
+  - Sizes: 1920�900 hero (`assets/images/home/hero-*.png`).
+  - Category glyphs prompt: �Simple, bold glyphs for categories (puzzle, reflex, sports, board).�
+  - Sizes: 256�256 (`assets/images/home/categories/`).
+  - Seasonal banner prompt: �Thin seasonal banner, abstract motif per season, high readability.� Size: 1600�300 (`assets/images/seasonal/`).
+
+- T4 Tic Tac Toe Deluxe
+  - Board/pad prompt: �Premium tic-tac-toe board and subtle background, soft highlights, neutral slate + accent.� Size: 1920�1080 (`assets/images/tic-tac-toe/`).
+  - Win-line FX prompt: �Glowing sweep line particle, 8 frames sprite sheet, transparent.� Size: 512�512, 4�2 grid (`assets/particles/tictactoe-win.png`).
+  - Confetti: 256�256 bursts (`assets/particles/tictactoe-confetti.png`).
+
+- T5 Air Hockey Arena
+  - Arena prompt: �Air hockey table top with goals; clean fibers, neutral field; no brand marks.� 1920�1080 (`assets/images/air-hockey/arena.png`).
+  - Goal light loop: �Radial glow loop, 6 frames.� Sprite sheet 512�512 (6�1) (`assets/particles/air-hockey/goal-light.png`).
+  - Puck trail: 256�128 streak (`assets/particles/air-hockey/puck-trail.png`).
+  - Sparks: 256�256 burst (`assets/particles/air-hockey/sparks.png`).
+
+- T6 Ping Pong Rally
+  - Table/court: 1920�1080 seasonal variants (`assets/images/ping-pong/table-*.png`).
+  - Crowd parallax: two layers 1920�1080 with top alpha fade (`assets/images/ping-pong/crowd-layer-{near,far}.png`).
+  - Paddle trail: 256�128 (`assets/particles/ping-pong/paddle-trail.png`).
+  - Spin FX: 256�256 ring sprites (`assets/particles/ping-pong/spin.png`).
+  - Prompt style: �Clean sports table, soft ambient vignette, flat shading; match season accents.�
+
+- T7 Spinner War
+  - Arena backgrounds: 1920�1080 (`assets/images/spinner-war/arena-*.png`).
+  - Boost pickup icons: 128�128 per type (`assets/images/spinner-war/boost-*.png`).
+  - Impact burst: 512�512 sprite sheet 4�4 (`assets/particles/spinner-war/impact-burst.png`).
+  - Haptic overlay: 1920�1080 subtle vignette (`assets/images/spinner-war/overlay-vignette.png`).
+  - Prompt: �Futuristic arena panels, bright boosts, clean impact bursts; flat neon accents on dark slate.�
+
+- T8 Snakes Duel
+  - Grid backplates: 1920�1080 seasonal variants (`assets/images/snakes-duel/grid-*.png`).
+  - Seasonal apples: 128�128 seasonal fruit icons (`assets/images/snakes-duel/apple-*.png`).
+  - Explosion overlays: 256�256 (`assets/particles/snakes-duel/explosion.png`).
+  - Prompt: �Arcade snake set: flat sprites, crisp edges, strong season colors; transparent backgrounds.�
+
+- T9 Penalty Kicks
+  - Stadium/pitch: 1920�1080 (`assets/images/penalty-kicks/stadium-*.png`).
+  - Characters: keeper/shooter poses (front/side) 512�512 each (`assets/images/penalty-kicks/characters/*.png`).
+  - Goal net overlay: 1920�1080 transparent (`assets/images/penalty-kicks/net-overlay.png`).
+  - Ball trail: 256�64 streak (`assets/particles/penalty-kicks/ball-trail.png`).
+  - Confetti: 512�512 burst (`assets/particles/penalty-kicks/confetti.png`).
+  - Prompt: �Bright stadium scene, crowd abstracted; flat, clean shapes; accent colors from season; transparent FX sprites.�
+
+- Export & Integration Checklist
+  - Place files in the listed folders; use PNG+alpha.
+  - Add `require("../assets/...png")` entries to `core/assets.ts:imageManifest` (and to `particleManifest` for FX ids).
+  - If seasonal variants, extend `contexts/SeasonalContext.tsx` maps and consume via appropriate screens/views.
+  - Validate on device: check contrast against UI, readability at 360dp width, and safe areas.
+## Design Asset Requirements (T179)
+- **T1 Core Framework Refresh**: No art deliverables; ensure any shared UI chrome updates land in `assets/ui/` with entries added to `core/assets.ts` if new imagery ships alongside framework tweaks.
+- **T2 Shared Art & Audio Pipeline**: Provide UI kit (buttons, chips, panels) and global iconography saved under `assets/images/ui/`; register additions in `core/assets.ts:imageManifest` and extend shared styles in `styles/` as needed.
+- **T3 Home & Game Selection UX**: Deliver hero artwork per featured slot (`assets/images/home/hero-*.png`), category glyphs (`assets/images/home/categories/`), and seasonal banner variants (`assets/images/seasonal/banner-*.png`); update `core/assets.ts` and `HomeScreen` hero manifest when files land.
+- **T4 Tic Tac Toe Deluxe**: Supply deluxe board/background textures (`assets/images/tic-tac-toe/board-*.png`), win-line FX sprite sheet (`assets/particles/tictactoe-win.png`), and celebratory confetti; wire through `core/assets.ts` and reference inside `TicTacToeView` FX hooks.
+- **T5 Air Hockey Arena**: Need arena mats, goal light animations, puck trails, and spark bursts. Place boards in `assets/images/air-hockey/`, particles in `assets/particles/air-hockey/`, and add to `core/assets.ts` plus `AirHockeyView` particle map.
+- **T6 Ping Pong Rally**: Provide table skins, crowd silhouettes/loop layers, paddle trail sprites, and spin FX (`assets/images/ping-pong/`, `assets/particles/ping-pong/`). Register in `core/assets.ts` and hook via `PingPongView` ambience/FX pipeline.
+- **T7 Spinner War**: Deliver arena backgrounds, boost pickup icons, impact burst sheets, and haptic cue overlays. Store imagery in `assets/images/spinner-war/` and particles in `assets/particles/spinner-war/`; update `core/assets.ts` plus the boost manifest in `SpinnerWarView`.
+- **T8 Snakes Duel**: Seasonal snake bodies/trails already landed. Remaining needs: grid backplates, seasonal apple variants (`assets/images/snakes-duel/grid-*.png`, `assets/images/snakes-duel/apple-*.png`), and explosion overlays (`assets/particles/snakes-duel/`). Append to manifests and reference via `getSnakesDuelTheme` once provided.
+- **T9 Penalty Kicks Clash**: Request pitch/stadium backgrounds (`assets/images/penalty-kicks/stadium-*.png`), keeper/player spritesheets (`assets/images/penalty-kicks/characters/`), goal net overlays, ball trails (`assets/particles/penalty-kicks/ball-trail.png`), and celebration confetti. When assets arrive, register in `core/assets.ts`, extend `SeasonalContext` if seasonally themed, and wire through forthcoming `PenaltyKicksView` FX hooks.
 ## Next Objectives
 - T5 polish: monitor goalie fairness after tuning; consider layered cheer FX if players request more hype.
 - T6 polish: run extended rally QA; evaluate adding bot tier for solo mode.
 - T7 Spinner War backlog: evaluate additional power-ups, haptics, and boost balance post QA (T7-A/B/C/D/E completed).
-- T8 Snakes Duel: await art/FX delivery, run final smoke QA, and prep summary ahead of T9 kickoff.
+- T8 Snakes Duel: QA seasonal sprite orientations/FX timing after textured renderer hookup.
+- T9 Penalty Kicks: kick off T9-B swipe prototype and basic keeper dive response.
 
 ## Notes
 - Session work (this chat): consolidated Ping Pong into MVC; tuned Air Hockey physics (friction 0.9965, damping 0.965, speed caps), ensured goal reset stability.
 - Spinner War: persisted bot difficulty, added cooldown, seasonal arena background, boost UI rings/bars.
 - Air Hockey: rotating goal SFX trio, stored difficulty preference, tighter goalie lane clamp.
 - Ping Pong: clamped spin, raised vertical pace floor, tidied ambience cue timer.
-- Snakes Duel: adaptive grid renderer with skin selection, countdown/restart overlays, full movement & collision loop, Rookie/Pro/Legend bot tuning, and telemetry events wired to analytics.
+- Snakes Duel: adaptive grid renderer with skin selection, seasonal sprite/particle theming via SeasonalContext + AssetLoader, countdown/restart overlays, full movement & collision loop, Rookie/Pro/Legend bot tuning, and telemetry events wired to analytics.
 
 
 
@@ -93,7 +181,7 @@
 - T9-A: Spec & Placeholder (completed)
   - Goal: Capture shootout mechanics and create skeleton model/controller/view/screen.
   - Acceptance: docs/penalty-kicks-spec.md drafted; placeholder runtime registered and visible in manifest. **Done**
-- T9-B: Swipe Interaction Prototype (pending)
+- T9-B: Swipe Interaction Prototype (in progress)
   - Goal: Implement swipe detection for shooter and placeholder keeper dive.
   - Acceptance: Debug overlay shows shot vector and keeper response.
 - T9-C: Bot Difficulty Plan (pending)
@@ -105,4 +193,10 @@
 - T9-E: QA & Telemetry Prep (pending)
   - Goal: Add QA checklist items and telemetry event list for Penalty Kicks.
   - Acceptance: docs/QA.md and telemetry doc updated.
+
+
+
+
+
+
 

@@ -1,8 +1,10 @@
 "use client"
 
 import type React from "react"
-import { createContext, useContext, useState, useEffect } from "react"
+import { createContext, useContext, useState, useEffect, useCallback } from "react"
 import AsyncStorage from "@react-native-async-storage/async-storage"
+
+import { particleManifest } from "../core/assets"
 
 // Define the seasons we'll support
 export type Season = "spring" | "summer" | "autumn" | "winter" | "none"
@@ -19,6 +21,29 @@ export type SpecialEvent = {
 }
 
 // Define the shape of our context data
+export type SnakesDuelTextures = {
+  head: number
+  body: number
+  turn: number
+  tail: number
+  grid: number
+  apple: number
+}
+
+export type SnakesDuelSeasonalTheme = {
+  textures: SnakesDuelTextures
+  particle: keyof typeof particleManifest
+  palette: {
+    fill: string
+    glow: string
+  }
+}
+
+export type HomeSeasonalAssets = {
+  hero: number
+  banner: number
+}
+
 type SeasonalContextType = {
   currentSeason: Season
   specialEvents: SpecialEvent[]
@@ -31,7 +56,9 @@ type SeasonalContextType = {
   }
   isSeasonalThemeEnabled: boolean
   toggleSeasonalTheme: () => void
-  getSeasonalGameBackground: (gameId: string) => string | null
+  getSeasonalGameBackground: (gameId: string) => number | null
+  getSnakesDuelTheme: () => SnakesDuelSeasonalTheme
+  getHomeArtwork: () => HomeSeasonalAssets
 }
 
 // Create the context with a default undefined value
@@ -112,28 +139,125 @@ const seasonalThemes = {
   },
 }
 
-// Game-specific seasonal backgrounds
-const seasonalGameBackgrounds = {
+// Game-specific seasonal backgrounds (module references)
+const seasonalGameBackgrounds: Record<Season, Record<string, number>> = {
   spring: {
-    "tic-tac-toe": "spring-tic-tac-toe-bg.png",
-    "ping-pong": "spring-ping-pong-bg.png",
-    // Add more game backgrounds as needed
+    "tic-tac-toe": require("../assets/images/tic-tac-toe-bg.png"),
+    "ping-pong": require("../assets/images/ping-pong/table-spring.png"),
+    "spinner-war": require("../assets/images/spinner-war/arena-1.png"),
+    "air-hockey": require("../assets/images/air-hockey/arena.png"),
   },
   summer: {
-    "tic-tac-toe": "summer-tic-tac-toe-bg.png",
-    "ping-pong": "summer-ping-pong-bg.png",
-    // Add more game backgrounds as needed
+    "tic-tac-toe": require("../assets/images/tic-tac-toe-bg.png"),
+    "ping-pong": require("../assets/images/ping-pong/table-summer.png"),
+    "spinner-war": require("../assets/images/spinner-war/arena-2.png"),
+    "air-hockey": require("../assets/images/air-hockey/arena.png"),
   },
   autumn: {
-    "tic-tac-toe": "autumn-tic-tac-toe-bg.png",
-    "ping-pong": "autumn-ping-pong-bg.png",
-    // Add more game backgrounds as needed
+    "tic-tac-toe": require("../assets/images/tic-tac-toe-bg.png"),
+    "ping-pong": require("../assets/images/ping-pong/table-autumn.png"),
+    "spinner-war": require("../assets/images/spinner-war/arena-3.png"),
+    "air-hockey": require("../assets/images/air-hockey/arena.png"),
   },
   winter: {
-    "tic-tac-toe": "winter-tic-tac-toe-bg.png",
-    "ping-pong": "winter-ping-pong-bg.png",
-    // Add more game backgrounds as needed
+    "tic-tac-toe": require("../assets/images/tic-tac-toe-bg.png"),
+    "ping-pong": require("../assets/images/ping-pong/table-winter.png"),
+    "spinner-war": require("../assets/images/spinner-war/arena-1.png"),
+    "air-hockey": require("../assets/images/air-hockey/arena.png"),
   },
+  none: {},
+}
+
+const homeSeasonalAssets: Record<Exclude<Season, "none">, HomeSeasonalAssets> = {
+  spring: {
+    hero: require("../assets/images/home/hero-spring.png"),
+    banner: require("../assets/images/seasonal/banner-spring.png"),
+  },
+  summer: {
+    hero: require("../assets/images/home/hero-summer.png"),
+    banner: require("../assets/images/seasonal/banner-summer.png"),
+  },
+  autumn: {
+    hero: require("../assets/images/home/hero-autumn.png"),
+    banner: require("../assets/images/seasonal/banner-autumn.png"),
+  },
+  winter: {
+    hero: require("../assets/images/home/hero-winter.png"),
+    banner: require("../assets/images/seasonal/banner-winter.png"),
+  },
+}
+
+const homeAssetsBySeason: Record<Season, HomeSeasonalAssets> = {
+  ...homeSeasonalAssets,
+  none: homeSeasonalAssets.spring,
+}
+
+const snakeSeasonalThemesBase: Record<Exclude<Season, "none">, SnakesDuelSeasonalTheme> = {
+  spring: {
+    textures: {
+      head: require("../assets/images/snakes-duel/spring-head.png"),
+      body: require("../assets/images/snakes-duel/spring-body.png"),
+      turn: require("../assets/images/snakes-duel/spring-turn.png"),
+      tail: require("../assets/images/snakes-duel/spring-tail.png"),
+      grid: require("../assets/images/snakes-duel/grid-spring.png"),
+      apple: require("../assets/images/snakes-duel/apple-spring.png"),
+    },
+    particle: "snakes-spring",
+    palette: {
+      fill: "#22c55e",
+      glow: "rgba(34,197,94,0.3)",
+    },
+  },
+  summer: {
+    textures: {
+      head: require("../assets/images/snakes-duel/summer-head.png"),
+      body: require("../assets/images/snakes-duel/summer-body.png"),
+      turn: require("../assets/images/snakes-duel/summer-turn.png"),
+      tail: require("../assets/images/snakes-duel/summer-tail.png"),
+      grid: require("../assets/images/snakes-duel/grid-summer.png"),
+      apple: require("../assets/images/snakes-duel/apple-summer.png"),
+    },
+    particle: "snakes-summer",
+    palette: {
+      fill: "#fde047",
+      glow: "rgba(253,224,71,0.28)",
+    },
+  },
+  autumn: {
+    textures: {
+      head: require("../assets/images/snakes-duel/autumn-head.png"),
+      body: require("../assets/images/snakes-duel/autumn-body.png"),
+      turn: require("../assets/images/snakes-duel/autumn-turn.png"),
+      tail: require("../assets/images/snakes-duel/autumn-tail.png"),
+      grid: require("../assets/images/snakes-duel/grid-autumn.png"),
+      apple: require("../assets/images/snakes-duel/apple-autumn.png"),
+    },
+    particle: "snakes-autumn",
+    palette: {
+      fill: "#f97316",
+      glow: "rgba(249,115,22,0.32)",
+    },
+  },
+  winter: {
+    textures: {
+      head: require("../assets/images/snakes-duel/winter-head.png"),
+      body: require("../assets/images/snakes-duel/winter-body.png"),
+      turn: require("../assets/images/snakes-duel/winter-turn.png"),
+      tail: require("../assets/images/snakes-duel/winter-tail.png"),
+      grid: require("../assets/images/snakes-duel/grid-winter.png"),
+      apple: require("../assets/images/snakes-duel/apple-winter.png"),
+    },
+    particle: "snakes-winter",
+    palette: {
+      fill: "#38bdf8",
+      glow: "rgba(56,189,248,0.35)",
+    },
+  },
+}
+
+const snakeSeasonalThemes: Record<Season, SnakesDuelSeasonalTheme> = {
+  ...snakeSeasonalThemesBase,
+  none: snakeSeasonalThemesBase.spring,
 }
 
 /**
@@ -145,27 +269,22 @@ const seasonalGameBackgrounds = {
  * and toggle seasonal theming.
  */
 export const SeasonalProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // State for current season and active event
   const [currentSeason, setCurrentSeason] = useState<Season>("none")
   const [activeEvent, setActiveEvent] = useState<SpecialEvent | null>(null)
   const [isSeasonalThemeEnabled, setIsSeasonalThemeEnabled] = useState(true)
 
-  // Determine current season and check for active events on mount
   useEffect(() => {
     const determineCurrentSeason = () => {
       const now = new Date()
       const month = now.getMonth()
-
-      // Determine season based on month (Northern Hemisphere)
       if (month >= 2 && month <= 4) {
-        return "spring" // March to May
+        return "spring"
       } else if (month >= 5 && month <= 7) {
-        return "summer" // June to August
+        return "summer"
       } else if (month >= 8 && month <= 10) {
-        return "autumn" // September to November
-      } else {
-        return "winter" // December to February
+        return "autumn"
       }
+      return "winter"
     }
 
     const checkForActiveEvents = () => {
@@ -188,16 +307,14 @@ export const SeasonalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     setActiveEvent(checkForActiveEvents())
     loadSeasonalPreference()
 
-    // Set up a daily check for season changes and events
     const dailyCheck = setInterval(() => {
       setCurrentSeason(determineCurrentSeason())
       setActiveEvent(checkForActiveEvents())
-    }, 86400000) // 24 hours in milliseconds
+    }, 86400000)
 
     return () => clearInterval(dailyCheck)
   }, [])
 
-  // Toggle seasonal theme preference
   const toggleSeasonalTheme = async () => {
     const newValue = !isSeasonalThemeEnabled
     setIsSeasonalThemeEnabled(newValue)
@@ -209,23 +326,41 @@ export const SeasonalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }
   }
 
-  // Get seasonal background for a specific game
-  const getSeasonalGameBackground = (gameId: string): string | null => {
+  const getSeasonalGameBackground = (gameId: string): number | null => {
     if (!isSeasonalThemeEnabled) return null
 
-    // If there's an active event, prioritize event-specific backgrounds
     if (activeEvent) {
-      // This would require additional event-specific background mapping
-      // For now, we'll just return null to use the default background
       return null
     }
 
-    // Otherwise use season-specific backgrounds
     const seasonBackgrounds = seasonalGameBackgrounds[currentSeason]
     return seasonBackgrounds && seasonBackgrounds[gameId] ? seasonBackgrounds[gameId] : null
   }
 
-  // Determine which theme to use (event theme takes priority over seasonal theme)
+  const getSnakesDuelTheme = useCallback((): SnakesDuelSeasonalTheme => {
+    if (!isSeasonalThemeEnabled) {
+      return snakeSeasonalThemes.none
+    }
+
+    if (activeEvent) {
+      return snakeSeasonalThemes[currentSeason] ?? snakeSeasonalThemes.none
+    }
+
+    return snakeSeasonalThemes[currentSeason] ?? snakeSeasonalThemes.none
+  }, [activeEvent, currentSeason, isSeasonalThemeEnabled])
+
+  const getHomeArtwork = useCallback((): HomeSeasonalAssets => {
+    if (!isSeasonalThemeEnabled) {
+      return homeAssetsBySeason.none
+    }
+
+    if (activeEvent) {
+      return homeAssetsBySeason[currentSeason] ?? homeAssetsBySeason.none
+    }
+
+    return homeAssetsBySeason[currentSeason] ?? homeAssetsBySeason.none
+  }, [activeEvent, currentSeason, isSeasonalThemeEnabled])
+
   const theme =
     activeEvent && isSeasonalThemeEnabled
       ? {
@@ -236,7 +371,6 @@ export const SeasonalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         }
       : seasonalThemes[isSeasonalThemeEnabled ? currentSeason : "none"]
 
-  // Context value
   const value = {
     currentSeason,
     specialEvents,
@@ -245,17 +379,13 @@ export const SeasonalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     isSeasonalThemeEnabled,
     toggleSeasonalTheme,
     getSeasonalGameBackground,
+    getSnakesDuelTheme,
+    getHomeArtwork,
   }
 
   return <SeasonalContext.Provider value={value}>{children}</SeasonalContext.Provider>
 }
 
-/**
- * Custom hook to use the SeasonalContext
- *
- * This hook provides access to the seasonal context data and functions.
- * It throws an error if used outside of a SeasonalProvider.
- */
 export const useSeasonal = () => {
   const context = useContext(SeasonalContext)
   if (context === undefined) {
