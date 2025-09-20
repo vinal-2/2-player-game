@@ -5,6 +5,7 @@ import AirHockeyScreen from "./air-hockey/AirHockeyScreen"
 import TicTacToeScreen from "./tic-tac-toe/TicTacToeScreen"
 import PingPongScreen from "./ping-pong/PingPongScreen"
 import SpinnerWarScreen from "./spinner-war/SpinnerWarScreen"
+import SnakesDuelScreen from "./snakes-duel/SnakesDuelScreen"
 
 type GameRegistryEntry = {
   id: string
@@ -16,6 +17,7 @@ const registryEntries: GameRegistryEntry[] = [
   { id: "tic-tac-toe", component: TicTacToeScreen },
   { id: "ping-pong", component: PingPongScreen },
   { id: "spinner-war", component: SpinnerWarScreen },
+  { id: "snakes-duel", component: SnakesDuelScreen },
 ]
 
 let isInitialised = false
