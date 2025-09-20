@@ -64,6 +64,7 @@
 | 2025-09-20 | T8 Difficulty UI | Added bot difficulty chips, AI telemetry events, and persistence for Snakes Duel. |
 | 2025-09-20 | Spinner War Fixes | Removed stray module identifiers, enabled reset handling, honoured initial VS Bot mode, and added mode/difficulty highlights. |
 | 2025-09-20 | T8 Snakes Polish | Added apple splash FX with haptics, rematch overlay controls, AI telemetry escape event, and art handoff checklist. |
+| 2025-09-20 | T9 Kickoff | Added Penalty Kicks spec, placeholder runtime, and registry entry. |
 
 ## Competitive Insights (Notes)
 - Content density: 40ï¿½50 lightweight games with consistent input patterns; prioritize fast load and 1ï¿½3 controls.
@@ -85,4 +86,23 @@
 - Air Hockey: rotating goal SFX trio, stored difficulty preference, tighter goalie lane clamp.
 - Ping Pong: clamped spin, raised vertical pace floor, tidied ambience cue timer.
 - Snakes Duel: adaptive grid renderer with skin selection, countdown/restart overlays, full movement & collision loop, Rookie/Pro/Legend bot tuning, and telemetry events wired to analytics.
+
+
+
+### T9 Penalty Kicks Workboard
+- T9-A: Spec & Placeholder (completed)
+  - Goal: Capture shootout mechanics and create skeleton model/controller/view/screen.
+  - Acceptance: docs/penalty-kicks-spec.md drafted; placeholder runtime registered and visible in manifest. **Done**
+- T9-B: Swipe Interaction Prototype (pending)
+  - Goal: Implement swipe detection for shooter and placeholder keeper dive.
+  - Acceptance: Debug overlay shows shot vector and keeper response.
+- T9-C: Bot Difficulty Plan (pending)
+  - Goal: Outline bot keeper heuristics for Rookie/Pro/Legend tiers.
+  - Acceptance: Document updated with reaction/dive behaviour; controller uses config map.
+- T9-D: Art & FX Handoff (pending)
+  - Goal: Define required goal/keeper assets, crowd FX, and haptics mapping.
+  - Acceptance: Checklist added to art brief with deadlines.
+- T9-E: QA & Telemetry Prep (pending)
+  - Goal: Add QA checklist items and telemetry event list for Penalty Kicks.
+  - Acceptance: docs/QA.md and telemetry doc updated.
 
