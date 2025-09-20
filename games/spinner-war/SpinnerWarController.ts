@@ -12,6 +12,9 @@ export class SpinnerWarController implements GameController {
   private inputManager: InputManager;
   private moveSpeed = 1;
   private pushForce = 0.2;
+  private mode: "friend" | "bot" = "friend";
+  private botDifficulty: "rookie" | "pro" | "legend" = "pro";
+  private impactCooldown = 0;
   
 
   constructor(model: SpinnerWarModel) {
@@ -39,7 +42,58 @@ export class SpinnerWarController implements GameController {
   /**
    * Updates the controller
    */
-  public update(deltaTime: number): void {}
+  public update(deltaTime: number): void {
+    if (this.mode !== "bot" || !this.model.state.gameActive) return;
+    if (this.impactCooldown > 0) {
+      this.impactCooldown -= 1;
+    }
+    const s = this.model.state;
+    const me = s.player2;
+    const foe = s.player1;
+    const targetX = foe.x * 0.7 + s.areaCenterX * 0.3;
+    const targetY = foe.y * 0.7 + s.areaCenterY * 0.3;
+
+    const dx = targetX - me.x;
+    const dy = targetY - me.y;
+    const dist = Math.max(Math.hypot(dx, dy), 0.0001);
+    let aimX = dx / dist;
+    let aimY = dy / dist;
+
+    const difficultyMap = {
+      rookie: { jitter: 0.24, accel: 0.1, vmax: 1.8 },
+      pro: { jitter: 0.12, accel: 0.16, vmax: 2.5 },
+      legend: { jitter: 0.05, accel: 0.2, vmax: 3.1 },
+    } as const;
+    const cfg = difficultyMap[this.botDifficulty];
+
+    aimX += (Math.random() - 0.5) * cfg.jitter;
+    aimY += (Math.random() - 0.5) * cfg.jitter;
+
+    // soften pursuit near arena boundary
+    const distToCenter = Math.hypot(me.x - s.areaCenterX, me.y - s.areaCenterY);
+    const edgeBuffer = s.areaRadius - me.radius * 1.4;
+    let accel = cfg.accel;
+    if (distToCenter > edgeBuffer) {
+      accel *= 0.45;
+      aimX += (s.areaCenterX - me.x) * 0.004;
+      aimY += (s.areaCenterY - me.y) * 0.004;
+    }
+
+    if (this.impactCooldown > 0) {
+      accel *= 0.4;
+    }
+
+    this.model.movePlayer2(aimX * accel, aimY * accel);
+
+    const v2x = s.player2.vx;
+    const v2y = s.player2.vy;
+    const speed = Math.hypot(v2x, v2y);
+    if (speed > cfg.vmax) {
+      const scale = cfg.vmax / speed;
+      s.player2.vx *= scale;
+      s.player2.vy *= scale;
+    }
+  }
 
   private handlePan = (player: "player1" | "player2", gestureState: any): void => {
     this.handleInput({ type: `pan${player}`, gestureState });
@@ -79,7 +133,29 @@ export class SpinnerWarController implements GameController {
       case "rotateplayer2":
         this.model.movePlayer2(this.moveSpeed, 0);
         break;
+      case "modebot":
+        this.mode = "bot";
+        break;
+      case "modefriend":
+        this.mode = "friend";
+        break;
+      case "difficultyrookie":
+        this.botDifficulty = "rookie";
+        break;
+      case "difficultypro":
+        this.botDifficulty = "pro";
+        break;
+      case "difficultylegend":
+        this.botDifficulty = "legend";
+        break;
+      case "impactcooldown":
+        this.impactCooldown = Math.max(this.impactCooldown, input.frames ?? 12);
+        break;
     }
+  }
+
+  public registerImpact(energy: number): void {
+    this.impactCooldown = Math.max(this.impactCooldown, Math.ceil(6 + energy));
   }
 
   /**

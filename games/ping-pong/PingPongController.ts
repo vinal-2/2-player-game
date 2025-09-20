@@ -32,7 +32,7 @@ export interface PingPongState {
   winner: Player | null;
 }
 
-export class PingPongModel implements GameModel {
+// MVC model (kept) `nexport class PingPongModel  implements GameModel {
   public state: PingPongState;
   private onGameOver: (winner: Player | "draw") => void = () => {};
   private playSound: (sound: any) => void;

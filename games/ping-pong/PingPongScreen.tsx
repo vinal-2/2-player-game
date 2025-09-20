@@ -15,6 +15,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context"
 import { Ionicons } from "@expo/vector-icons"
 
+import AsyncStorage from "@react-native-async-storage/async-storage"
 import type { GameRuntimeProps } from "../../core/gameRuntime"
 import { useSound } from "../../contexts/SoundContext"
 import { useAnalytics } from "../../contexts/AnalyticsContext"
@@ -28,16 +29,20 @@ const BALL_SIZE = 16
 const MAX_SCORE = 11
 
 const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(value, max))
+const MAX_SPIN = 1.6
 const easeTowards = (current: number, target: number, factor: number) => current + (target - current) * factor
 
 const PingPongScreen: React.FC<GameRuntimeProps> = ({ gameId, mode, onExit, onEvent }) => {
   const { playSound } = useSound()
+  // crowd ambience cue timer
+  const crowdCueTimer = useRef<NodeJS.Timeout | null>(null)
   const { trackEvent } = useAnalytics()
 
   const [scores, setScores] = useState({ player1: 0, player2: 0 })
   const [gameActive, setGameActive] = useState(true)
   const [rallyCount, setRallyCount] = useState(0)
   const [winnerBanner, setWinnerBanner] = useState<string | null>(null)
+  const [ambienceEnabled, setAmbienceEnabled] = useState(true)
 
   useEffect(() => {
     const loadScores = async () => {
@@ -55,6 +60,29 @@ const PingPongScreen: React.FC<GameRuntimeProps> = ({ gameId, mode, onExit, onEv
     }
     loadScores()
   }, [gameId])
+
+  useEffect(() => {
+    if (crowdCueTimer.current) {
+      clearTimeout(crowdCueTimer.current)
+      crowdCueTimer.current = null
+    }
+    if (!ambienceEnabled) return
+    const scheduleCue = () => {
+      if (!ambienceEnabled) return
+      try {
+        playSound(require("../../assets/sounds/round-start.mp3"))
+      } catch {}
+      const delay = 7000 + Math.floor(Math.random() * 5000)
+      crowdCueTimer.current = setTimeout(scheduleCue, delay)
+    }
+    crowdCueTimer.current = setTimeout(scheduleCue, 6000)
+    return () => {
+      if (crowdCueTimer.current) {
+        clearTimeout(crowdCueTimer.current)
+        crowdCueTimer.current = null
+      }
+    }
+  }, [ambienceEnabled, playSound])
 
   const player1Position = useRef(new Animated.ValueXY({ x: BOARD_WIDTH / 2 - PADDLE_WIDTH / 2, y: BOARD_HEIGHT - 40 })).current
   const player2Position = useRef(new Animated.ValueXY({ x: BOARD_WIDTH / 2 - PADDLE_WIDTH / 2, y: 20 })).current
@@ -183,7 +211,7 @@ const PingPongScreen: React.FC<GameRuntimeProps> = ({ gameId, mode, onExit, onEv
     }
 
     ballVelocity.current.vx += spinRef.current * 0.02
-    spinRef.current *= 0.96
+    spinRef.current = clamp(spinRef.current * 0.96, -MAX_SPIN, MAX_SPIN)
 
     ballVelocity.current.vx = clamp(ballVelocity.current.vx, -9.5, 9.5)
     ballVelocity.current.vy = clamp(ballVelocity.current.vy, -12, 12)
@@ -197,11 +225,18 @@ const PingPongScreen: React.FC<GameRuntimeProps> = ({ gameId, mode, onExit, onEv
     const velocity = paddle === "player1" ? player1Velocity.current : player2Velocity.current
     const offset = nextBallX + BALL_SIZE / 2 - (paddleX + PADDLE_WIDTH / 2)
     const normalizedOffset = clamp(offset / (PADDLE_WIDTH / 2), -1, 1)
-    const vertical = Math.abs(ballVelocity.current.vy) + 0.6
+    const incomingSpeed = Math.sqrt(ballVelocity.current.vx ** 2 + ballVelocity.current.vy ** 2)
 
-    ballVelocity.current.vy = (paddle === "player1" ? -vertical : vertical)
-    ballVelocity.current.vx = clamp(ballVelocity.current.vx + normalizedOffset * 4 + velocity * 0.4, -10, 10)
-    spinRef.current = clamp(normalizedOffset + velocity * 0.2, -1.5, 1.5)
+    // Set vertical direction away from paddle, increase a touch for pace
+    const verticalBase = Math.max(4.5, incomingSpeed * 0.92)
+    ballVelocity.current.vy = (paddle === "player1" ? -verticalBase : verticalBase)
+
+    // Horizontal based on hit position + paddle movement
+    const horizontalDelta = normalizedOffset * 5 + velocity * 0.5
+    ballVelocity.current.vx = clamp(horizontalDelta, -10.5, 10.5)
+
+    // Spin proportional to hit offset and paddle motion; will decay over time
+    spinRef.current = clamp(normalizedOffset * 1.05 + velocity * 0.22, -MAX_SPIN, MAX_SPIN)
 
     const nextRally = lastHitRef.current && lastHitRef.current !== paddle ? rallyCount + 1 : 1
     lastHitRef.current = paddle
@@ -249,6 +284,7 @@ const PingPongScreen: React.FC<GameRuntimeProps> = ({ gameId, mode, onExit, onEv
   useEffect(() => {
     startGame()
     return () => {
+      if (crowdCueTimer.current) clearTimeout(crowdCueTimer.current)
       if (animationRef.current) {
         cancelAnimationFrame(animationRef.current)
       }
@@ -285,6 +321,12 @@ const PingPongScreen: React.FC<GameRuntimeProps> = ({ gameId, mode, onExit, onEv
             <Text style={styles.scoreLabel}>{mode === "bot" ? "Bot" : "Player 2"}</Text>
             <Text style={styles.scoreValue}>{scores.player2}</Text>
           </View>
+        </View>
+        <View style={styles.controlsRow}>
+          <TouchableOpacity style={styles.footerButton} onPress={() => setAmbienceEnabled((v) => !v)}>
+            <Ionicons name={ambienceEnabled ? "volume-high" : "volume-mute"} size={18} color="white" />
+            <Text style={styles.footerButtonText}>{ambienceEnabled ? "Crowd On" : "Crowd Off"}</Text>
+          </TouchableOpacity>
         </View>
 
         <View style={styles.boardContainer}>
@@ -451,6 +493,11 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     paddingHorizontal: 24,
   },
+  controlsRow: {
+    flexDirection: "row",
+    justifyContent: "center",
+    marginTop: 8,
+  },
   footerButton: {
     flexDirection: "row",
     alignItems: "center",
@@ -467,3 +514,4 @@ const styles = StyleSheet.create({
 })
 
 export default PingPongScreen
+

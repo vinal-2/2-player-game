@@ -1,6 +1,7 @@
 tsx
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ImageBackground, Image } from 'react-native';
+import React, { forwardRef, useImperativeHandle, useMemo, useRef } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ImageBackground, Image, Animated } from 'react-native';
+import { useSeasonal } from '../../contexts/SeasonalContext';
 import { SpinnerWarState, Spinner } from './SpinnerWarModel';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -9,15 +10,44 @@ interface SpinnerWarViewProps {
   onReset: () => void;
   onBack: () => void;
   onPress: (player: "player1" | "player2", action: string) => void;
+  onImpactBurst?: () => void;
+  onModeChange?: (mode: "friend" | "bot") => void;
+  onDifficultyChange?: (level: "rookie" | "pro" | "legend") => void;
 }
 
-export const SpinnerWarView: React.FC<SpinnerWarViewProps> = ({
+export const SpinnerWarView = forwardRef(({ 
   state,
   onBack,
   onReset,
   onPress
-}) => {
+}: SpinnerWarViewProps, ref: React.Ref<{ triggerImpact(): void }>) => {
+  const burstScale = useRef(new Animated.Value(0)).current
+  const shake = useRef(new Animated.Value(0)).current
+  const triggerBurst = () => {
+    burstScale.setValue(0)
+    Animated.sequence([
+      Animated.timing(burstScale, { toValue: 1, duration: 80, useNativeDriver: true }),
+      Animated.timing(burstScale, { toValue: 0, duration: 140, useNativeDriver: true }),
+    ]).start()
+  }
+  const triggerShake = () => {
+    shake.setValue(0)
+    Animated.sequence([
+      Animated.timing(shake, { toValue: 1, duration: 40, useNativeDriver: true }),
+      Animated.timing(shake, { toValue: 0, duration: 90, useNativeDriver: true }),
+    ]).start()
+  }
+
+  useImperativeHandle(ref, () => ({
+    triggerImpact() {
+      triggerBurst()
+      triggerShake()
+    },
+  }))
   const renderSpinner = (spinner: Spinner, player: string) => {
+    const boost = player === 'player1' ? state.boosts.player1 : state.boosts.player2
+    const maxBoost = 1.5
+    const ratio = Math.max(0, Math.min(1, (boost - 1) / (maxBoost - 1)))
     return (
       <View
         key={player}
@@ -35,12 +65,21 @@ export const SpinnerWarView: React.FC<SpinnerWarViewProps> = ({
           source={require('../../assets/images/versus.png')} 
           style={styles.spinnerImage}
         />
+        {/* per-player boost ring */}
+        <View style={[styles.boostRing, { opacity: ratio }]} />
+        {/* per-player duration bar */}
+        <View style={[styles.boostBarContainer, player === 'player1' ? styles.boostBarBottom : styles.boostBarTop]}>
+          <View style={[styles.boostBarFill, { width: `${Math.round(ratio * 100)}%` }]} />
+        </View>
       </View>
     );
   };
 
+  const { getSeasonalGameBackground } = useSeasonal()
+  const background = useMemo(() => getSeasonalGameBackground('spinner-war') || require('../../assets/images/spinner-war-bg.png'), [getSeasonalGameBackground])
+
   return (
-    <ImageBackground source={require('../../assets/images/spinner-war-bg.png')} style={styles.backgroundImage}>
+    <ImageBackground source={background} style={styles.backgroundImage}>
       <View style={styles.container}>
         <View style={styles.header}>
           <TouchableOpacity style={styles.backButton} onPress={onBack}>
@@ -51,11 +90,39 @@ export const SpinnerWarView: React.FC<SpinnerWarViewProps> = ({
           </TouchableOpacity>
         </View>
 
-        <View style={styles.gameArea}>
-          {renderSpinner(state.player1Spinner, 'player1')}
-          {renderSpinner(state.player2Spinner, 'player2')}
-          <View style={[styles.arena, {width: state.arenaRadius * 2, height: state.arenaRadius * 2, borderRadius: state.arenaRadius}]} />
+        <View style={styles.modeRow}>
+          <TouchableOpacity style={styles.chip} onPress={() => onModeChange && onModeChange('friend')}>
+            <Text style={styles.chipText}>2P</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.chip} onPress={() => onModeChange && onModeChange('bot')}>
+            <Text style={styles.chipText}>Bot</Text>
+          </TouchableOpacity>
+          <View style={{ width: 12 }} />
+          <TouchableOpacity style={styles.chip} onPress={() => onDifficultyChange && onDifficultyChange('rookie')}>
+            <Text style={styles.chipText}>Rookie</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.chip} onPress={() => onDifficultyChange && onDifficultyChange('pro')}>
+            <Text style={styles.chipText}>Pro</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.chip} onPress={() => onDifficultyChange && onDifficultyChange('legend')}>
+            <Text style={styles.chipText}>Legend</Text>
+          </TouchableOpacity>
         </View>
+
+        <Animated.View style={[styles.gameArea, { transform: [{ translateX: shake.interpolate({ inputRange: [0,1], outputRange: [0, 6] }) }] }]}>
+          <View style={[styles.arena, {width: state.areaRadius * 2, height: state.areaRadius * 2, borderRadius: state.areaRadius}]} />
+          {state.powerUp && (
+            <View style={[styles.powerUp, { left: state.powerUp.x - state.powerUp.radius, top: state.powerUp.y - state.powerUp.radius, width: state.powerUp.radius * 2, height: state.powerUp.radius * 2 }]} />
+          )}
+          <Animated.View pointerEvents="none" style={[styles.burstOverlay, { opacity: burstScale, transform: [{ scale: burstScale.interpolate({ inputRange: [0,1], outputRange: [1, 1.08] }) }] }]} />
+          {renderSpinner(state.player1, 'player1')}
+          {renderSpinner(state.player2, 'player2')}
+          {(state.boosts.player1 > 1.02 || state.boosts.player2 > 1.02) && (
+            <View style={styles.boostBadge}>
+              <Text style={styles.boostText}>Speed Boost</Text>
+            </View>
+          )}
+        </Animated.View>
 
         <View style={styles.controls}>
             <View style={styles.playerControls}>
@@ -132,6 +199,45 @@ const styles = StyleSheet.create({
     height: '100%',
     resizeMode: 'contain'
   },
+  burstOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(255,255,255,0.08)'
+  },
+  powerUp: {
+    position: 'absolute',
+    backgroundColor: 'rgba(34,197,94,0.85)',
+    borderRadius: 999,
+    borderWidth: 2,
+    borderColor: 'white',
+  },
+  boostRing: {
+    position: 'absolute',
+    top: -4,
+    left: -4,
+    right: -4,
+    bottom: -4,
+    borderRadius: 9999,
+    borderWidth: 4,
+    borderColor: 'rgba(34,197,94,0.9)',
+  },
+  boostBarContainer: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    height: 6,
+    backgroundColor: 'rgba(255,255,255,0.2)'
+  },
+  boostBarTop: { top: -10, borderRadius: 4 },
+  boostBarBottom: { bottom: -10, borderRadius: 4 },
+  boostBarFill: {
+    height: '100%',
+    backgroundColor: 'rgba(34,197,94,0.95)',
+    borderRadius: 4,
+  },
   controls: {
     width: '100%',
     flexDirection: 'row',
@@ -140,6 +246,36 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 20,
     paddingHorizontal: 20,
+  },
+  modeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 56,
+    gap: 8,
+  },
+  chip: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.12)'
+  },
+  chipText: {
+    color: 'white',
+    fontWeight: '700'
+  },
+  boostBadge: {
+    position: 'absolute',
+    top: 12,
+    left: 12,
+    backgroundColor: 'rgba(34,197,94,0.85)',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 12,
+  },
+  boostText: {
+    color: 'white',
+    fontWeight: '700',
   },
   playerControls:{
       alignItems: 'center'

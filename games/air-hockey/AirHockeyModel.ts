@@ -42,9 +42,9 @@ const clamp = (value: number, min: number, max: number) => Math.max(min, Math.mi
 
 const MAX_GOALS = 5
 const GOAL_RESET_DELAY = 900
-const PUCK_SPEED_MIN = 2.6
-const PUCK_SPEED_MAX = 14
-const WALL_DAMPING = 0.96
+const PUCK_SPEED_MIN = 3
+const PUCK_SPEED_MAX = 15
+const WALL_DAMPING = 0.965
 
 /**
  * Air Hockey Game Model with improved physics and AI support
@@ -53,7 +53,7 @@ export class AirHockeyModel implements GameModel {
   public isActive = false
   public state: AirHockeyState
 
-  private friction = 0.995
+  private friction = 0.9965
   private paddleVelocity = {
     player1: { vx: 0, vy: 0 },
     player2: { vx: 0, vy: 0 },
@@ -222,8 +222,8 @@ export class AirHockeyModel implements GameModel {
     const reflectVx = puck.vx - 2 * incomingDot * nx
     const reflectVy = puck.vy - 2 * incomingDot * ny
 
-    const paddleInfluenceX = paddleVelocity.vx * 0.6
-    const paddleInfluenceY = paddleVelocity.vy * 0.6
+    const paddleInfluenceX = paddleVelocity.vx * 0.7
+    const paddleInfluenceY = paddleVelocity.vy * 0.7
 
     let newVx = reflectVx + paddleInfluenceX
     let newVy = reflectVy + paddleInfluenceY
@@ -267,6 +267,9 @@ export class AirHockeyModel implements GameModel {
     this.state.gameActive = false
     this.state.scores[scorer]++
     this.onGoalScored(scorer)
+    // Nudge puck velocity to reduce silent stalls between rounds
+    this.state.puck.vx = 0
+    this.state.puck.vy = 0
     this.onStateChange()
 
     if (this.state.scores[scorer] >= MAX_GOALS) {
@@ -324,20 +327,30 @@ export class AirHockeyModel implements GameModel {
   public updateBotPaddle(difficulty: number): void {
     const { puck, player2Paddle, boardWidth, boardHeight } = this.state
 
-    const focusZone = boardHeight * 0.6
-    if (puck.y >= focusZone) {
-      return
-    }
+    const puckSpeed = Math.hypot(puck.vx, puck.vy)
+    const baseFocus = 0.52 - (1 - difficulty) * 0.08
+    const focusAdjust = Math.min(puckSpeed / PUCK_SPEED_MAX, 1) * 0.12
+    const focusZone = boardHeight * clamp(baseFocus + focusAdjust, 0.4, 0.68)
+    if (puck.y >= focusZone) return
 
-    const predictionSteps = 18 + Math.floor((1 - difficulty) * 20)
+    const predictionSteps = 12 + Math.floor(difficulty * 22)
     const predictedX = this.predictPuckX(predictionSteps)
 
-    const errorOffset = (Math.random() - 0.5) * (1 - difficulty) * boardWidth * 0.25
-    const targetX = clamp(predictedX + errorOffset, player2Paddle.radius, boardWidth - player2Paddle.radius)
+    const misRead = (Math.random() - 0.5) * (1 - difficulty) * boardWidth * 0.18
+    const laneLimit = boardWidth * (0.18 + difficulty * 0.22)
+    const center = boardWidth / 2
+    const targetX = clamp(
+      center + clamp(predictedX + misRead - center, -laneLimit, laneLimit),
+      player2Paddle.radius,
+      boardWidth - player2Paddle.radius,
+    )
 
-    const chaseSpeed = 0.08 + difficulty * 0.18
-    player2Paddle.x += (targetX - player2Paddle.x) * chaseSpeed
-    this.paddleVelocity.player2.vx = (targetX - player2Paddle.x) * chaseSpeed
+    let chaseSpeed = 0.07 + difficulty * 0.14 + (puckSpeed / PUCK_SPEED_MAX) * 0.04
+    chaseSpeed = clamp(chaseSpeed, 0.07, 0.24)
+
+    const delta = (targetX - player2Paddle.x) * chaseSpeed
+    player2Paddle.x += delta
+    this.paddleVelocity.player2.vx = delta
   }
 
   private predictPuckX(steps: number): number {

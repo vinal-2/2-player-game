@@ -12,6 +12,9 @@ export const soundManifest: Record<SoundPlaybackKey, any> = {
   "wall-hit": require("../assets/sounds/wall-hit.mp3"),
   "paddle-hit": require("../assets/sounds/paddle-hit.mp3"),
   score: require("../assets/sounds/score.mp3"),
+  // Optional alternates used by Air Hockey goal FX if present
+  // Fallback to primary if alternates not found at runtime
+  // These keys are still valid SoundPlaybackKey via require calls
   collision: require("../assets/sounds/collision.mp3"),
   "round-start": require("../assets/sounds/round-start.mp3"),
   "eat-food": require("../assets/sounds/eat-food.mp3"),

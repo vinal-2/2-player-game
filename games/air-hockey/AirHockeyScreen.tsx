@@ -31,6 +31,12 @@ const AirHockeyScreen: React.FC<GameRuntimeProps> = ({ gameId, mode, onExit, onE
   const [forceRender, setForceRender] = useState(0)
   const [goalFlash, setGoalFlash] = useState<"player1" | "player2" | null>(null)
   const [difficulty, setDifficulty] = useState<AirHockeyDifficulty>("pro")
+  const goalFxIndex = useRef(0)
+  const goalFx = useRef([
+    require("../../assets/sounds/score.mp3"),
+    require("../../assets/sounds/round-start.mp3"),
+    require("../../assets/sounds/collision.mp3"),
+  ] as const)
 
   const lastGoalTimeout = useRef<NodeJS.Timeout | null>(null)
 
@@ -71,7 +77,11 @@ const AirHockeyScreen: React.FC<GameRuntimeProps> = ({ gameId, mode, onExit, onE
     gameEngine.registerGame(gameId, model, controller)
 
     model.setOnGoalScored((player) => {
-      playSound(require("../../assets/sounds/score.mp3"))
+      // Rotate through goal FX for variety
+      const sounds = goalFx.current
+      const fx = sounds[goalFxIndex.current % sounds.length]
+      goalFxIndex.current = (goalFxIndex.current + 1) % sounds.length
+      playSound(fx)
       trackEvent("game_score", { game: gameId, player })
       onEvent?.({ type: "score", payload: { player } })
       setGoalFlash(player as "player1" | "player2")
@@ -120,11 +130,23 @@ const AirHockeyScreen: React.FC<GameRuntimeProps> = ({ gameId, mode, onExit, onE
     (level: AirHockeyDifficulty) => {
       setDifficulty(level)
       controller.setBotDifficulty(level)
+      AsyncStorage.setItem("air-hockey-difficulty", level).catch(() => undefined)
       trackEvent("air_hockey_difficulty", { game: gameId, level })
       onEvent?.({ type: "custom", payload: { action: "difficulty", level } })
     },
     [controller, gameId, onEvent, trackEvent],
   )
+
+  useEffect(() => {
+    AsyncStorage.getItem("air-hockey-difficulty")
+      .then((stored) => {
+        if (stored === "rookie" || stored === "pro" || stored === "legend") {
+          setDifficulty(stored)
+          controller.setBotDifficulty(stored)
+        }
+      })
+      .catch(() => undefined)
+  }, [controller])
 
   const backgroundImage = useMemo(
     () => getSeasonalGameBackground(gameId) || require("../../assets/images/air-hockey-bg.png"),
