@@ -2,12 +2,17 @@
 import type { SnakesDuelModel, SnakeRuntime } from "./SnakesDuelModel"
 import { aStar, floodFillArea } from "./utils/pathfinding"
 
-const BOT_PATH_CACHE_FRAMES = 6
-const MAX_PATHFIND_NODES = 220
-const MAX_FLOOD_NODES = 260
+const BOT_CONFIG = {
+  rookie: { replanInterval: 8, maxNodes: 160, floodNodes: 200, jitter: 0.3 },
+  pro: { replanInterval: 6, maxNodes: 220, floodNodes: 260, jitter: 0.18 },
+  legend: { replanInterval: 4, maxNodes: 280, floodNodes: 320, jitter: 0.08 },
+} as const
+
+type BotDifficulty = keyof typeof BOT_CONFIG
 
 export class SnakesDuelController implements GameController {
   private mode: "friend" | "bot"
+  private difficulty: BotDifficulty = "pro"
   private frameCounter = 0
   private cachedPath: { steps: { x: number; y: number }[]; lastHead: { x: number; y: number } } | null = null
 
@@ -24,8 +29,9 @@ export class SnakesDuelController implements GameController {
       return
     }
 
+    const config = BOT_CONFIG[this.difficulty]
     this.frameCounter += 1
-    if (this.frameCounter % BOT_PATH_CACHE_FRAMES !== 0) {
+    if (this.frameCounter % config.replanInterval !== 0) {
       return
     }
 
@@ -38,6 +44,8 @@ export class SnakesDuelController implements GameController {
     const grid = this.projectGrid(botSnake)
     const head = botSnake.segments[0]
 
+    const jitteredGoal = this.applyGoalJitter(targetApple, config.jitter)
+
     if (this.cachedPath && this.cachedPath.lastHead.x === head.x && this.cachedPath.lastHead.y === head.y) {
       const next = this.cachedPath.steps[1]
       if (next) {
@@ -49,12 +57,12 @@ export class SnakesDuelController implements GameController {
     const result = aStar({
       grid,
       start: head,
-      goal: targetApple,
-      maxNodes: MAX_PATHFIND_NODES,
+      goal: jitteredGoal,
+      maxNodes: config.maxNodes,
     })
 
     if (!result || result.length < 2) {
-      const safeDirection = this.findSafestDirection(botSnake, grid)
+      const safeDirection = this.findSafestDirection(botSnake, grid, config.floodNodes)
       if (safeDirection) {
         botSnake.direction = safeDirection
       }
@@ -77,6 +85,11 @@ export class SnakesDuelController implements GameController {
     this.cachedPath = null
   }
 
+  public setDifficulty(level: BotDifficulty): void {
+    this.difficulty = level
+    this.cachedPath = null
+  }
+
   public handleInput(): void {}
   public cleanup(): void {}
 
@@ -90,6 +103,13 @@ export class SnakesDuelController implements GameController {
     } else if (Math.abs(dy) > 0) {
       snake.direction = dy > 0 ? "down" : "up"
     }
+  }
+
+  private applyGoalJitter(goal: { x: number; y: number }, jitter: number) {
+    if (jitter <= 0) return goal
+    const offsetX = Math.round((Math.random() - 0.5) * jitter * 2)
+    const offsetY = Math.round((Math.random() - 0.5) * jitter * 2)
+    return { x: goal.x + offsetX, y: goal.y + offsetY }
   }
 
   private projectGrid(botSnake: SnakeRuntime): number[][] {
@@ -108,7 +128,11 @@ export class SnakesDuelController implements GameController {
     return projection
   }
 
-  private findSafestDirection(botSnake: SnakeRuntime, grid: number[][]): "up" | "down" | "left" | "right" | null {
+  private findSafestDirection(
+    botSnake: SnakeRuntime,
+    grid: number[][],
+    floodLimit: number,
+  ): "up" | "down" | "left" | "right" | null {
     const head = botSnake.segments[0]
     const options: Array<{ dir: "up" | "down" | "left" | "right"; score: number }> = []
 
@@ -123,7 +147,7 @@ export class SnakesDuelController implements GameController {
       const nx = head.x + move.dx
       const ny = head.y + move.dy
       if (!grid[ny] || grid[ny][nx] === 2) continue
-      const score = floodFillArea(grid, { x: nx, y: ny }, MAX_FLOOD_NODES)
+      const score = floodFillArea(grid, { x: nx, y: ny }, floodLimit)
       options.push({ dir: move.dir, score })
     }
 

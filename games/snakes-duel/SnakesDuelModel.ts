@@ -15,6 +15,11 @@ export interface SnakeRuntime {
   skin: string
 }
 
+export type SnakesDuelEvent =
+  | { type: "apple_eaten"; playerId: string; length: number; tickRate: number }
+  | { type: "collision"; playerId: string; reason: "wall" | "self" | "opponent" | "head_on"; tick: number }
+  | { type: "round_end"; winner: string | null; ticks: number }
+
 export interface SnakesDuelState {
   grid: number[][]
   status: "idle" | "countdown" | "running" | "paused" | "gameover"
@@ -24,6 +29,7 @@ export interface SnakesDuelState {
   winner?: "player1" | "player2" | "bot" | null
   tickRate: number
   ticks: number
+  lastEliminated?: { id: string; reason: "wall" | "self" | "opponent" | "head_on" }[]
 }
 
 const createEmptyGrid = (width: number, height: number) =>
@@ -37,6 +43,7 @@ export class SnakesDuelModel implements GameModel {
   public isActive = false
   public state: SnakesDuelState
   private tickAccumulator = 0
+  private emitEvent: (event: SnakesDuelEvent) => void = () => {}
 
   constructor(public readonly gridWidth: number, public readonly gridHeight: number) {
     this.state = {
@@ -47,7 +54,12 @@ export class SnakesDuelModel implements GameModel {
       winner: null,
       tickRate: BASE_TICK_RATE,
       ticks: 0,
+      lastEliminated: [],
     }
+  }
+
+  public setEventEmitter(emitter: (event: SnakesDuelEvent) => void) {
+    this.emitEvent = emitter
   }
 
   public initialize(): void {
@@ -77,6 +89,7 @@ export class SnakesDuelModel implements GameModel {
       winner: null,
       tickRate: BASE_TICK_RATE,
       ticks: 0,
+      lastEliminated: [],
     }
     this.seedDemoState()
   }
@@ -84,7 +97,176 @@ export class SnakesDuelModel implements GameModel {
   private step(): void {
     this.state.ticks += 1
     this.updateTickRate()
-    // TODO: advance snakes, handle collisions, spawn apples
+
+    const moves = this.state.snakes.map((snake) => ({
+      snake,
+      nextHead: this.getNextHead(snake),
+      eliminate: false,
+      reason: "wall" as "wall" | "self" | "opponent" | "head_on",
+    }))
+
+    const tailsToVacate = new Set<string>()
+    this.state.snakes.forEach((snake) => {
+      const tail = snake.segments[snake.segments.length - 1]
+      if (snake.pendingGrowth === 0) {
+        tailsToVacate.add(this.makeKey(tail.x, tail.y))
+      }
+    })
+
+    const occupied = new Map<string, SnakeRuntime>()
+    this.state.snakes.forEach((snake) => {
+      snake.segments.forEach((segment) => {
+        occupied.set(this.makeKey(segment.x, segment.y), snake)
+      })
+    })
+
+    const headTargets = new Map<string, SnakeRuntime[]>()
+
+    moves.forEach((move) => {
+      const { nextHead, snake } = move
+      const outOfBounds =
+        nextHead.x < 0 ||
+        nextHead.y < 0 ||
+        nextHead.x >= this.gridWidth ||
+        nextHead.y >= this.gridHeight
+      if (outOfBounds) {
+        move.eliminate = true
+        move.reason = "wall"
+        return
+      }
+
+      const targetKey = this.makeKey(nextHead.x, nextHead.y)
+      const occupants = headTargets.get(targetKey)
+      if (occupants) {
+        occupants.push(snake)
+      } else {
+        headTargets.set(targetKey, [snake])
+      }
+
+      const occupyingSnake = occupied.get(targetKey)
+      if (occupyingSnake) {
+        const isTail = tailsToVacate.has(targetKey) && occupyingSnake.id === snake.id
+        if (!isTail) {
+          move.eliminate = true
+          move.reason = occupyingSnake === snake ? "self" : "opponent"
+        }
+      }
+    })
+
+    headTargets.forEach((snakesAtCell, key) => {
+      if (snakesAtCell.length > 1) {
+        moves.forEach((move) => {
+          if (this.makeKey(move.nextHead.x, move.nextHead.y) === key) {
+            move.eliminate = true
+            move.reason = "head_on"
+          }
+        })
+      }
+    })
+
+    const eliminations: { id: string; reason: "wall" | "self" | "opponent" | "head_on" }[] = []
+
+    moves.forEach((move) => {
+      const { snake, nextHead, eliminate } = move
+      if (eliminate) {
+        eliminations.push({ id: snake.id, reason: move.reason })
+        return
+      }
+
+      const appleIndex = this.state.apples.findIndex((apple) => apple.x === nextHead.x && apple.y === nextHead.y)
+      const ateApple = appleIndex !== -1
+
+      snake.segments.unshift(nextHead)
+      if (ateApple) {
+        snake.pendingGrowth += 1
+        this.state.apples.splice(appleIndex, 1)
+        this.spawnApple()
+        this.emitEvent({
+          type: "apple_eaten",
+          playerId: snake.id,
+          length: snake.segments.length,
+          tickRate: this.state.tickRate,
+        })
+      }
+
+      if (snake.pendingGrowth > 0) {
+        snake.pendingGrowth -= 1
+      } else {
+        snake.segments.pop()
+      }
+    })
+
+    if (eliminations.length > 0) {
+      this.state.lastEliminated = eliminations
+      eliminations.forEach((elim) => {
+        this.emitEvent({ type: "collision", playerId: elim.id, reason: elim.reason, tick: this.state.ticks })
+      })
+      this.resolveEndState(eliminations)
+    }
+  }
+
+  private resolveEndState(eliminations: { id: string; reason: "wall" | "self" | "opponent" | "head_on" }[]): void {
+    const surviving = this.state.snakes.filter((snake) => !eliminations.some((elim) => elim.id === snake.id))
+
+    this.state.snakes = surviving
+
+    if (surviving.length === 0) {
+      this.state.status = "gameover"
+      this.state.winner = null
+      this.isActive = false
+      this.emitEvent({ type: "round_end", winner: null, ticks: this.state.ticks })
+      return
+    }
+
+    if (surviving.length === 1) {
+      this.state.status = "gameover"
+      this.state.winner = surviving[0].id
+      this.isActive = false
+      this.emitEvent({ type: "round_end", winner: surviving[0].id, ticks: this.state.ticks })
+    }
+  }
+
+  private getNextHead(snake: SnakeRuntime): SnakeSegment {
+    const head = snake.segments[0]
+    switch (snake.direction) {
+      case "up":
+        return { x: head.x, y: head.y - 1 }
+      case "down":
+        return { x: head.x, y: head.y + 1 }
+      case "left":
+        return { x: head.x - 1, y: head.y }
+      case "right":
+      default:
+        return { x: head.x + 1, y: head.y }
+    }
+  }
+
+  private spawnApple(): void {
+    const occupied = new Set<string>()
+    this.state.snakes.forEach((snake) => {
+      snake.segments.forEach((segment) => {
+        occupied.add(this.makeKey(segment.x, segment.y))
+      })
+    })
+
+    const freeCells: Array<{ x: number; y: number }> = []
+    for (let y = 0; y < this.gridHeight; y++) {
+      for (let x = 0; x < this.gridWidth; x++) {
+        const key = this.makeKey(x, y)
+        if (!occupied.has(key)) {
+          freeCells.push({ x, y })
+        }
+      }
+    }
+
+    if (freeCells.length === 0) return
+    const spawnIndex = Math.floor(Math.random() * freeCells.length)
+    const spot = freeCells[spawnIndex]
+    this.state.apples.push(spot)
+  }
+
+  private makeKey(x: number, y: number) {
+    return `${x}:${y}`
   }
 
   private updateTickRate(): void {

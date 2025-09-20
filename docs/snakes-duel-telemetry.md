@@ -22,3 +22,4 @@
 ## Next Steps
 - Align event names with analytics backend schema.
 - Update `docs/QA.md` with Snakes Duel checklist.
+- Model emits apple, collision, round_end events; screen funnels to analytics/onEvent.

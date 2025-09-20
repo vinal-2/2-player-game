@@ -11,7 +11,7 @@ import { useSound } from "../../contexts/SoundContext"
 import { useAnalytics } from "../../contexts/AnalyticsContext"
 import type { GameRuntimeProps } from "../../core/gameRuntime"
 
-import { SnakesDuelModel } from "./SnakesDuelModel"
+import { SnakesDuelModel, type SnakesDuelEvent } from "./SnakesDuelModel"
 import { SnakesDuelController } from "./SnakesDuelController"
 import SnakesDuelView from "./SnakesDuelView"
 
@@ -20,6 +20,7 @@ const GRID_HEIGHT = 22
 
 const MODE_STORAGE_KEY = "snakes-duel-mode"
 const SKIN_STORAGE_KEY = "snakes-duel-skins"
+const DIFFICULTY_STORAGE_KEY = "snakes-duel-difficulty"
 
 const SnakesDuelScreen: React.FC<GameRuntimeProps> = ({ gameId, mode, onExit, onEvent }) => {
   const { getSeasonalGameBackground } = useSeasonal()
@@ -33,6 +34,7 @@ const SnakesDuelScreen: React.FC<GameRuntimeProps> = ({ gameId, mode, onExit, on
     player1: "classic-neon",
     player2: "sunset-blaze",
   })
+  const [difficulty, setDifficulty] = useState<"rookie" | "pro" | "legend">("pro")
   const [viewVersion, setViewVersion] = useState(0)
   const backgroundImage = getSeasonalGameBackground(gameId) || require("../../assets/images/spinner-war-bg.png")
   const gameEngine = GameEngine.getInstance()
@@ -70,10 +72,26 @@ const SnakesDuelScreen: React.FC<GameRuntimeProps> = ({ gameId, mode, onExit, on
   }, [model])
 
   useEffect(() => {
+    AsyncStorage.getItem(DIFFICULTY_STORAGE_KEY)
+      .then((stored) => {
+        if (stored === "rookie" || stored === "pro" || stored === "legend") {
+          setDifficulty(stored)
+          controller.setDifficulty(stored)
+        }
+      })
+      .catch(() => undefined)
+  }, [controller])
+
+  useEffect(() => {
     controller.setMode(currentMode)
   }, [controller, currentMode])
 
   useEffect(() => {
+    controller.setDifficulty(difficulty)
+  }, [controller, difficulty])
+
+  useEffect(() => {
+    model.setEventEmitter(handleModelEvent)
     gameEngine.registerGame(gameId, model, controller)
     model.initialize()
     controller.initialize()
@@ -87,6 +105,32 @@ const SnakesDuelScreen: React.FC<GameRuntimeProps> = ({ gameId, mode, onExit, on
       controller.cleanup()
     }
   }, [controller, gameEngine, gameId, model, currentMode, playSound, trackEvent])
+
+  const handleModelEvent = (event: SnakesDuelEvent) => {
+    switch (event.type) {
+      case "apple_eaten":
+        trackEvent("snakes_apple_eaten", {
+          game: gameId,
+          player: event.playerId,
+          length: event.length,
+          tickRate: event.tickRate,
+        })
+        onEvent?.({ type: "custom", payload: { action: "apple", ...event } })
+        break
+      case "collision":
+        trackEvent("snakes_collision", {
+          game: gameId,
+          player: event.playerId,
+          reason: event.reason,
+        })
+        onEvent?.({ type: "custom", payload: { action: "collision", ...event } })
+        break
+      case "round_end":
+        trackEvent("snakes_round_end", { game: gameId, winner: event.winner, ticks: event.ticks })
+        onEvent?.({ type: "custom", payload: { action: "round_end", ...event } })
+        break
+    }
+  }
 
   const handleToggleMode = () => {
     const nextMode = currentMode === "bot" ? "friend" : "bot"
@@ -115,6 +159,13 @@ const SnakesDuelScreen: React.FC<GameRuntimeProps> = ({ gameId, mode, onExit, on
     })
   }
 
+  const handleSelectDifficulty = (level: "rookie" | "pro" | "legend") => {
+    setDifficulty(level)
+    AsyncStorage.setItem(DIFFICULTY_STORAGE_KEY, level).catch(() => undefined)
+    trackEvent("snakes_difficulty", { game: gameId, level })
+    onEvent?.({ type: "custom", payload: { action: "difficulty", level } })
+  }
+
   return (
     <ImageBackground source={backgroundImage} style={{ flex: 1 }}>
       <SafeAreaView style={{ flex: 1 }}>
@@ -123,6 +174,8 @@ const SnakesDuelScreen: React.FC<GameRuntimeProps> = ({ gameId, mode, onExit, on
           state={model.state}
           mode={currentMode}
           selectedSkins={selectedSkins}
+          selectedDifficulty={difficulty}
+          onSelectDifficulty={handleSelectDifficulty}
           onSelectSkin={handleSelectSkin}
           onBack={onExit}
           onReset={handleReset}

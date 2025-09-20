@@ -7,7 +7,9 @@ interface SnakesDuelViewProps {
   state: SnakesDuelState
   mode: "friend" | "bot"
   selectedSkins: Record<"player1" | "player2", string>
+  selectedDifficulty: "rookie" | "pro" | "legend"
   onSelectSkin: (playerId: "player1" | "player2", skinId: string) => void
+  onSelectDifficulty: (level: "rookie" | "pro" | "legend") => void
   onBack: () => void
   onReset: () => void
   onToggleMode: () => void
@@ -20,6 +22,12 @@ const SKIN_OPTIONS = [
   { id: "midnight-pixel", label: "Midnight Pixel" },
 ] as const
 
+const DIFFICULTY_OPTIONS: Array<{ id: "rookie" | "pro" | "legend"; label: string }> = [
+  { id: "rookie", label: "Rookie" },
+  { id: "pro", label: "Pro" },
+  { id: "legend", label: "Legend" },
+]
+
 const skinPalette: Record<string, { fill: string; glow: string }> = {
   "classic-neon": { fill: "#22c55e", glow: "rgba(34,197,94,0.3)" },
   "sunset-blaze": { fill: "#f97316", glow: "rgba(249,115,22,0.3)" },
@@ -28,7 +36,10 @@ const skinPalette: Record<string, { fill: string; glow: string }> = {
 }
 
 const SnakesDuelView = forwardRef<View, SnakesDuelViewProps>(
-  ({ state, mode, selectedSkins, onSelectSkin, onBack, onReset, onToggleMode }, ref) => {
+  (
+    { state, mode, selectedSkins, selectedDifficulty, onSelectSkin, onSelectDifficulty, onBack, onReset, onToggleMode },
+    ref,
+  ) => {
     const { width, height } = useWindowDimensions()
     const gridHeight = state.grid.length
     const gridWidth = state.grid[0]?.length ?? 0
@@ -91,7 +102,7 @@ const SnakesDuelView = forwardRef<View, SnakesDuelViewProps>(
 
     return (
       <View ref={ref} style={styles.container}>
-        <View style={styles.header}>
+        <View style={styles.headerRow}>
           <TouchableOpacity style={styles.chip} onPress={onBack}>
             <Text style={styles.chipText}>Back</Text>
           </TouchableOpacity>
@@ -104,6 +115,21 @@ const SnakesDuelView = forwardRef<View, SnakesDuelViewProps>(
           <TouchableOpacity style={styles.chip} onPress={onReset}>
             <Text style={styles.chipText}>Reset</Text>
           </TouchableOpacity>
+        </View>
+
+        <View style={styles.difficultyRow}>
+          {DIFFICULTY_OPTIONS.map(({ id, label }) => {
+            const active = selectedDifficulty === id
+            return (
+              <TouchableOpacity
+                key={`difficulty-${id}`}
+                style={[styles.diffChip, active && styles.diffChipActive]}
+                onPress={() => onSelectDifficulty(id)}
+              >
+                <Text style={[styles.diffChipText, active && styles.diffChipTextActive]}>{label}</Text>
+              </TouchableOpacity>
+            )
+          })}
         </View>
 
         <ScrollView
@@ -194,7 +220,7 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     justifyContent: "space-between",
   },
-  header: {
+  headerRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
@@ -226,6 +252,29 @@ const styles = StyleSheet.create({
   modeText: {
     color: "white",
     fontWeight: "700",
+  },
+  difficultyRow: {
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 12,
+    marginTop: 12,
+  },
+  diffChip: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 16,
+    backgroundColor: "rgba(30,41,59,0.6)",
+  },
+  diffChipActive: {
+    backgroundColor: "rgba(59,130,246,0.9)",
+  },
+  diffChipText: {
+    color: "rgba(226,232,240,0.75)",
+    fontWeight: "600",
+  },
+  diffChipTextActive: {
+    color: "white",
   },
   skinRow: {
     maxHeight: 52,

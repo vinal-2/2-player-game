@@ -26,3 +26,12 @@
 - [ ] Verify P1/P2 skin chips persist across reset and app relaunch.
 - [ ] Ensure seasonal background swap remains visible behind board.
 
+### Snakes Duel Movement
+- [ ] Verify snakes advance per tick and grow on apple consumption.
+- [ ] Confirm wall/self/opponent collisions end the round and winner recorded.
+- [ ] Head-on collision produces draw (no winner).
+
+### Snakes Duel Difficulty & Telemetry
+- [ ] Switch Rookie/Pro/Legend and verify bot behaviour changes (replan cadence).
+- [ ] Confirm analytics events fire for apple_eaten, collision, round_end (use debug logs).
+

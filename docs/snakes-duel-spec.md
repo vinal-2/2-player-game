@@ -33,3 +33,8 @@
 
 - Adaptive tick loop implemented in model (`SnakesDuelModel.step`) with ramp from 6→10 ticks/sec and tension multiplier (1.0–1.15).
 
+
+- Collision handling implemented: wall/self/opponent/head-on tracked via `state.lastEliminated`; winners resolved when only one snake survives.
+- Apple respawn fills random free cell immediately after consumption.
+
+- Solo/bot mode exposes Rookie/Pro/Legend difficulty chips mirroring Spinner War approach.
