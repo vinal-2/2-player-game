@@ -10,6 +10,8 @@ export class AccessibilityManager {
   private isScreenReaderEnabled = false
   private isReduceMotionEnabled = false
   private isHighContrastEnabled = false
+  private screenReaderSub: ReturnType<typeof AccessibilityInfo.addEventListener> | null = null
+  private reduceMotionSub: ReturnType<typeof AccessibilityInfo.addEventListener> | null = null
 
   // Singleton pattern
   public static getInstance(): AccessibilityManager {
@@ -31,13 +33,13 @@ export class AccessibilityManager {
     this.isScreenReaderEnabled = await AccessibilityInfo.isScreenReaderEnabled()
 
     // Listen for screen reader changes
-    AccessibilityInfo.addEventListener("screenReaderChanged", this.handleScreenReaderChanged)
+    this.screenReaderSub = AccessibilityInfo.addEventListener("screenReaderChanged", this.handleScreenReaderChanged)
 
     // Check if reduce motion is enabled
     this.isReduceMotionEnabled = await AccessibilityInfo.isReduceMotionEnabled()
 
     // Listen for reduce motion changes
-    AccessibilityInfo.addEventListener("reduceMotionChanged", this.handleReduceMotionChanged)
+    this.reduceMotionSub = AccessibilityInfo.addEventListener("reduceMotionChanged", this.handleReduceMotionChanged)
   }
 
   /**
@@ -148,7 +150,8 @@ export class AccessibilityManager {
    * Cleans up the accessibility manager
    */
   public cleanup(): void {
-    AccessibilityInfo.removeEventListener("screenReaderChanged", this.handleScreenReaderChanged)
-    AccessibilityInfo.removeEventListener("reduceMotionChanged", this.handleReduceMotionChanged)
+    this.screenReaderSub?.remove?.()
+    this.reduceMotionSub?.remove?.()
   }
 }
+

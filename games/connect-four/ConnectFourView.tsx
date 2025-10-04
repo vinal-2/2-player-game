@@ -1,119 +1,78 @@
-tsx
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ImageBackground, Image } from 'react-native';
-import { ConnectFourState, Piece } from './ConnectFourModel';
-import { Ionicons } from '@expo/vector-icons';
+import React from "react"
+import { View, Text, StyleSheet, TouchableOpacity } from "react-native"
+import type { ConnectFourState } from "./ConnectFourModel"
 
-interface ConnectFourViewProps {
-  state: ConnectFourState;
-  onReset: () => void;
-  onBack: () => void;
-  onDrop: (column: number) => void;
+type ConnectFourViewProps = {
+  state: ConnectFourState
+  onReset: () => void
+  onBack: () => void
 }
 
-const ConnectFourView: React.FC<ConnectFourViewProps> = ({ state, onReset, onBack, onDrop }) => {
-  const renderPiece = (piece: Piece) => {
-    switch (piece) {
-      case 'red':
-        return <Image source={require('../../assets/images/red-piece.png')} style={styles.pieceImage} />;
-      case 'yellow':
-        return <Image source={require('../../assets/images/yellow-piece.png')} style={styles.pieceImage} />;
-      default:
-        return null;
-    }
-  };
+const ConnectFourView: React.FC<ConnectFourViewProps> = ({ state, onReset, onBack }) => (
+  <View style={styles.container}>
+    <Text style={styles.title}>Connect Four</Text>
+    <Text style={styles.subtitle}>Connect Four is temporarily offline while we rebuild the new experience.</Text>
+    <Text style={styles.status}>Status: {state.status}</Text>
+    {state.winner && <Text style={styles.status}>Winner: {state.winner}</Text>}
 
-  const renderColumn = (column: number, pieces: Piece[]) => {
-    return (
-      <TouchableOpacity key={column} style={styles.column} onPress={() => onDrop(column)}>
-        {pieces.map((piece, row) => (
-          <View key={row} style={styles.cell}>
-            {renderPiece(piece)}
-          </View>
-        ))}
-      </TouchableOpacity>
-    );
-  };
+    <TouchableOpacity style={styles.primaryButton} onPress={onReset}>
+      <Text style={styles.primaryText}>Reset Placeholder</Text>
+    </TouchableOpacity>
 
-  return (
-    <ImageBackground source={require('../../assets/images/connect-four-bg.png')} style={styles.backgroundImage}>
-      <View style={styles.container}>
-        <View style={styles.header}>
-          <TouchableOpacity style={styles.backButton} onPress={onBack}>
-            <Ionicons name="arrow-back" size={24} color="white" />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.resetButton} onPress={onReset}>
-            <Ionicons name="refresh" size={24} color="white" />
-          </TouchableOpacity>
-        </View>
-        <View style={styles.board}>
-          {state.board.map((columnPieces, column) => renderColumn(column, columnPieces))}
-        </View>
-        {state.winner && <View style={styles.winnerContainer}><Text style={styles.winner}>{state.winner === 'draw' ? "Draw" : `${state.winner} wins!`}</Text></View>}
-      </View>
-    </ImageBackground>
-  );
-};
+    <TouchableOpacity style={styles.secondaryButton} onPress={onBack}>
+      <Text style={styles.secondaryText}>Back to Games</Text>
+    </TouchableOpacity>
+  </View>
+)
 
 const styles = StyleSheet.create({
-  backgroundImage: {
-    flex: 1,
-    resizeMode: 'cover',
-    justifyContent: 'center',
-  },
   container: {
     flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 24,
+    backgroundColor: "#0f172a",
   },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    width: '100%',
-    padding: 20,
-    position: 'absolute',
-    top: 0,
+  title: {
+    fontSize: 28,
+    fontWeight: "700",
+    color: "#f8fafc",
+    marginBottom: 12,
   },
-  backButton: {
-    padding: 10,
+  subtitle: {
+    fontSize: 16,
+    color: "#e2e8f0",
+    textAlign: "center",
+    marginBottom: 24,
   },
-  resetButton: {
-    padding: 10,
+  status: {
+    fontSize: 14,
+    color: "#cbd5f5",
+    marginBottom: 8,
   },
-  board: {
-    flexDirection: 'row',
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    padding: 10
+  primaryButton: {
+    marginTop: 24,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: "#f97316",
   },
-  column: {
-    marginHorizontal: 5,
-  },
-  cell: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    marginVertical: 5,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  pieceImage: {
-    width: 35,
-    height: 35,
-    resizeMode: 'contain'
-  },
-  winnerContainer:{
-    position: "absolute",
-    bottom: 30,
-    backgroundColor: "rgba(0, 0, 0, 0.8)",
-    padding: 10,
-    borderRadius: 10,
-  },
-  winner:{
+  primaryText: {
     color: "white",
-    fontSize: 20,
-    fontWeight: "bold",
-  }
-});
+    fontWeight: "600",
+  },
+  secondaryButton: {
+    marginTop: 12,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#fb923c",
+  },
+  secondaryText: {
+    color: "#fed7aa",
+    fontWeight: "600",
+  },
+})
 
-export default ConnectFourView;
+export default ConnectFourView

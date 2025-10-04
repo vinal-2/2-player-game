@@ -154,7 +154,7 @@ export const SoundProvider = ({ children }: SoundProviderProps) => {
 
     try {
       if (typeof sound === "string") {
-        await assetLoader.playSound(sound)
+        await assetLoader.playSound(sound as SoundPlaybackKey)
         return
       }
 

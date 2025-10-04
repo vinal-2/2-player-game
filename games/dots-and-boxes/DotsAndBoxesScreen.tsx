@@ -1,90 +1,54 @@
-tsx
 "use client"
 
-import type React from "react"
 import { useEffect, useState } from "react"
-import { SafeAreaView, ImageBackground } from "react-native"
-import { GameEngine } from "../../core/GameEngine"
-import { useSound } from "../../contexts/SoundContext"
+import { SafeAreaView, StyleSheet } from "react-native"
 import { useAnalytics } from "../../contexts/AnalyticsContext"
-import { useSeasonal } from "../../contexts/SeasonalContext"
+import { useSound } from "../../contexts/SoundContext"
 import DotsAndBoxesView from "./DotsAndBoxesView"
 import DotsAndBoxesModel from "./DotsAndBoxesModel"
 import DotsAndBoxesController from "./DotsAndBoxesController"
+import type { GameRuntimeProps } from "../../core/gameRuntime"
 
-interface DotsAndBoxesScreenProps {
-  route: {
-    params: {
-      mode: "friend" | "bot"
-    }
-  }
-  navigation: any
-}
-
-const DotsAndBoxesScreen: React.FC<DotsAndBoxesScreenProps> = ({ route, navigation }) => {
-  const { mode } = route.params
-  const { playSound } = useSound()
+const DotsAndBoxesScreen: React.FC<GameRuntimeProps> = ({ gameId, mode, onExit, onEvent }) => {
   const { trackEvent } = useAnalytics()
-  const { getSeasonalGameBackground } = useSeasonal()
-
+  const { playSound } = useSound()
   const [model] = useState(() => new DotsAndBoxesModel())
-  const [controller] = useState(() => new DotsAndBoxesController(model, mode))
-
-  const gameEngine = GameEngine.getInstance()
+  const [controller] = useState(() => new DotsAndBoxesController(model))
 
   useEffect(() => {
-    gameEngine.registerGame("dotsAndBoxes", model, controller)
-
-    model.setOnGameOver((winner) => {
-      if (winner === "draw") {
-        playSound("draw")
-        trackEvent("game_draw", { game: "dotsAndBoxes" })
-      } else {
-        playSound("win")
-        trackEvent("game_over", { game: "dotsAndBoxes", winner })
-      }
-    })
-
-    gameEngine.startGame("dotsAndBoxes")
+    controller.initialize()
+    trackEvent("game_start", { game_id: gameId, mode })
     playSound("game-start")
-    trackEvent("game_start", { game: "dotsAndBoxes", mode })
+    onEvent?.({ type: "custom", payload: { action: "dots_placeholder" } })
 
     return () => {
-      gameEngine.stopGame()
       controller.cleanup()
+      model.reset()
     }
-  }, [])
+  }, [controller, gameId, mode, model, onEvent, playSound, trackEvent])
 
   const handleReset = () => {
     controller.handleInput({ type: "reset" })
     playSound("game-start")
-    trackEvent("game_reset", { game: "dotsAndBoxes" })
+    trackEvent("game_reset", { game_id: gameId })
   }
 
   const handleBack = () => {
     playSound("button-press")
-    navigation.goBack()
+    onExit()
   }
-
-  const handleLinePress = (line: string) => {
-    playSound("cell-tap")
-    controller.handleInput({ type: "linePress", line })
-  }
-
-  const backgroundImage = getSeasonalGameBackground("dots-and-boxes") || require("../../assets/images/dots-and-boxes-bg.png")
 
   return (
-    <ImageBackground source={backgroundImage} style={{ flex: 1 }}>
-      <SafeAreaView style={{ flex: 1 }}>
-        <DotsAndBoxesView
-          state={model.state}
-          onReset={handleReset}
-          onBack={handleBack}
-          onLinePress={handleLinePress}
-        />
-      </SafeAreaView>
-    </ImageBackground>
+    <SafeAreaView style={styles.container}>
+      <DotsAndBoxesView state={model.state} onReset={handleReset} onBack={handleBack} />
+    </SafeAreaView>
   )
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
+})
 
 export default DotsAndBoxesScreen

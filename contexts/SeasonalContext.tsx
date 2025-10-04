@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import type React from "react"
 import { createContext, useContext, useState, useEffect, useCallback } from "react"
@@ -146,26 +146,32 @@ const seasonalGameBackgrounds: Record<Season, Record<string, number>> = {
     "ping-pong": require("../assets/images/ping-pong/table-spring.png"),
     "spinner-war": require("../assets/images/spinner-war/arena-1.png"),
     "air-hockey": require("../assets/images/air-hockey/arena.png"),
+    "snakes-duel": require("../assets/images/snakes-duel/grid-spring.png"),
   },
   summer: {
     "tic-tac-toe": require("../assets/images/tic-tac-toe-bg.png"),
     "ping-pong": require("../assets/images/ping-pong/table-summer.png"),
     "spinner-war": require("../assets/images/spinner-war/arena-2.png"),
     "air-hockey": require("../assets/images/air-hockey/arena.png"),
+    "snakes-duel": require("../assets/images/snakes-duel/grid-summer.png"),
   },
   autumn: {
     "tic-tac-toe": require("../assets/images/tic-tac-toe-bg.png"),
     "ping-pong": require("../assets/images/ping-pong/table-autumn.png"),
     "spinner-war": require("../assets/images/spinner-war/arena-3.png"),
     "air-hockey": require("../assets/images/air-hockey/arena.png"),
+    "snakes-duel": require("../assets/images/snakes-duel/grid-autumn.png"),
   },
   winter: {
     "tic-tac-toe": require("../assets/images/tic-tac-toe-bg.png"),
     "ping-pong": require("../assets/images/ping-pong/table-winter.png"),
     "spinner-war": require("../assets/images/spinner-war/arena-1.png"),
     "air-hockey": require("../assets/images/air-hockey/arena.png"),
+    "snakes-duel": require("../assets/images/snakes-duel/grid-winter.png"),
   },
-  none: {},
+  none: {
+    "snakes-duel": require("../assets/images/snakes-duel/grid-winter.png"),
+  },
 }
 
 const homeSeasonalAssets: Record<Exclude<Season, "none">, HomeSeasonalAssets> = {

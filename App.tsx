@@ -19,10 +19,11 @@ import { GameProvider } from "./contexts/GameContext"
 import { SeasonalProvider } from "./contexts/SeasonalContext"
 import { AnalyticsProvider } from "./contexts/AnalyticsContext"
 import { initialiseGameRegistry } from "./games/registerGames"
+import type { RootStackParamList } from "./navigation/types"
 
 initialiseGameRegistry()
 
-const Stack = createNativeStackNavigator()
+const Stack = createNativeStackNavigator<RootStackParamList>()
 
 export default function App() {
   const [isLoading, setIsLoading] = useState(true)
@@ -66,4 +67,6 @@ export default function App() {
     </GestureHandlerRootView>
   )
 }
+
+
 

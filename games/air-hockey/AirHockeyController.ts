@@ -1,102 +1,72 @@
-import { PanResponder, type PanResponderGestureState } from "react-native"
-
 import type { GameController } from "../../core/GameEngine"
-import type { AirHockeyModel } from "./AirHockeyModel"
+import type AirHockeyModel from "./AirHockeyModel"
 
-export type AirHockeyDifficulty = "rookie" | "pro" | "legend"
+type PlayerId = "player1" | "player2"
 
-const BOT_DIFFICULTY_MAP: Record<AirHockeyDifficulty, number> = {
-  rookie: 0.35,
-  pro: 0.6,
-  legend: 0.85,
+type AirHockeyInput =
+  | { type: "move"; player: PlayerId; x: number; y: number }
+  | { type: "reset" }
+  | { type: "mode"; mode: "friend" | "bot" }
+  | { type: "difficulty"; level: "rookie" | "pro" | "legend" }
+
+const BOT_SPEED: Record<"rookie" | "pro" | "legend", number> = {
+  rookie: 260,
+  pro: 320,
+  legend: 420,
 }
 
 export class AirHockeyController implements GameController {
-  private model: AirHockeyModel
-  private gameMode: "friend" | "bot"
-  private botDifficulty: AirHockeyDifficulty = "pro"
+  private mode: "friend" | "bot"
+  private difficulty: "rookie" | "pro" | "legend" = "pro"
 
-  private player1Start = { x: 0, y: 0 }
-  private player2Start = { x: 0, y: 0 }
-
-  public readonly player1PanHandlers: any
-  public readonly player2PanHandlers: any
-
-  constructor(model: AirHockeyModel, gameMode: "friend" | "bot") {
-    this.model = model
-    this.gameMode = gameMode
-
-    const player1Responder = PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onPanResponderGrant: () => {
-        this.player1Start.x = this.model.state.player1Paddle.x
-        this.player1Start.y = this.model.state.player1Paddle.y
-      },
-      onPanResponderMove: (_, gestureState) => {
-        this.handlePlayer1Pan(gestureState)
-      },
-      onPanResponderRelease: () => {
-        this.player1Start.x = this.model.state.player1Paddle.x
-        this.player1Start.y = this.model.state.player1Paddle.y
-      },
-    })
-
-    const player2Responder = PanResponder.create({
-      onStartShouldSetPanResponder: () => this.gameMode === "friend",
-      onPanResponderGrant: () => {
-        this.player2Start.x = this.model.state.player2Paddle.x
-        this.player2Start.y = this.model.state.player2Paddle.y
-      },
-      onPanResponderMove: (_, gestureState) => {
-        if (this.gameMode === "friend") {
-          this.handlePlayer2Pan(gestureState)
-        }
-      },
-      onPanResponderRelease: () => {
-        this.player2Start.x = this.model.state.player2Paddle.x
-        this.player2Start.y = this.model.state.player2Paddle.y
-      },
-    })
-
-    this.player1PanHandlers = player1Responder.panHandlers
-    this.player2PanHandlers = player2Responder.panHandlers
+  constructor(private readonly model: AirHockeyModel, mode: "friend" | "bot") {
+    this.mode = mode
   }
 
-  public initialize(): void {
-    // nothing additional
-  }
+  public initialize(): void {}
 
   public update(deltaTime: number): void {
-    if (this.gameMode === "bot" && this.model.state.gameActive) {
-      this.model.updateBotPaddle(BOT_DIFFICULTY_MAP[this.botDifficulty])
+    if (this.mode !== "bot") return
+
+    const state = this.model.state
+    const paddle = state.paddles.player2
+    const { position: puckPosition } = state.puck
+
+    const targetX = puckPosition.x
+    const targetY = Math.min(state.boardHeight * 0.35, puckPosition.y)
+    const speed = BOT_SPEED[this.difficulty]
+
+    const nextX = this.lerp(paddle.position.x, targetX, deltaTime * speed / state.boardWidth)
+    const nextY = this.lerp(paddle.position.y, targetY, deltaTime * speed / state.boardHeight)
+
+    this.model.movePaddle("player2", nextX, nextY)
+  }
+
+  public handleInput(input: AirHockeyInput): void {
+    switch (input.type) {
+      case "move":
+        if (input.player === "player2" && this.mode === "bot") {
+          return
+        }
+        this.model.movePaddle(input.player, input.x, input.y)
+        break
+      case "reset":
+        this.model.reset()
+        break
+      case "mode":
+        this.mode = input.mode
+        break
+      case "difficulty":
+        this.difficulty = input.level
+        break
     }
   }
 
-  private handlePlayer1Pan(gestureState: PanResponderGestureState): void {
-    if (!this.model.state.gameActive) return
+  public cleanup(): void {}
 
-    const targetX = this.player1Start.x + gestureState.dx
-    const targetY = this.player1Start.y + gestureState.dy
-    this.model.movePlayer1Paddle(targetX, targetY)
-  }
-
-  private handlePlayer2Pan(gestureState: PanResponderGestureState): void {
-    if (!this.model.state.gameActive || this.gameMode !== "friend") return
-
-    const targetX = this.player2Start.x + gestureState.dx
-    const targetY = this.player2Start.y + gestureState.dy
-    this.model.movePlayer2Paddle(targetX, targetY)
-  }
-
-  public setBotDifficulty(level: AirHockeyDifficulty): void {
-    this.botDifficulty = level
-  }
-
-  public handleInput(): void {
-    // handled via pan responders
-  }
-
-  public cleanup(): void {
-    // nothing to clean for PanResponder
+  private lerp(from: number, to: number, t: number) {
+    return from + (to - from) * Math.min(1, Math.max(0, t))
   }
 }
+
+export default AirHockeyController

@@ -20,7 +20,7 @@ export class AnalyticsManager {
   private sessionId: string
   private batchSize = 10
   private flushInterval = 30000 // 30 seconds
-  private flushTimeoutId: NodeJS.Timeout | null = null
+  private flushTimeoutId: ReturnType<typeof setTimeout> | null = null
 
   // Singleton pattern
   public static getInstance(): AnalyticsManager {

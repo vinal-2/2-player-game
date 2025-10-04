@@ -18,7 +18,9 @@ type AdContextType = {
 
 const AdContext = createContext<AdContextType | undefined>(undefined)
 
-export type AdProviderProps = { children: React.ReactNode }\r\n\r\nexport const AdProvider: React.FC<AdProviderProps> = ({ children }) => {
+export type AdProviderProps = { children: React.ReactNode }
+
+export const AdProvider: React.FC<AdProviderProps> = ({ children }) => {
   const { trackEvent } = useAnalytics()
   const [isPremium, setIsPremium] = useState(false)
   const [lastAdTime, setLastAdTime] = useState<number | null>(null)
@@ -28,7 +30,6 @@ export type AdProviderProps = { children: React.ReactNode }\r\n\r\nexport const 
   const [appState, setAppState] = useState(AppState.currentState)
   const [gameStartTime, setGameStartTime] = useState<number | null>(null)
 
-  // Load premium status
   useEffect(() => {
     const loadPremiumStatus = async () => {
       try {
@@ -47,14 +48,10 @@ export type AdProviderProps = { children: React.ReactNode }\r\n\r\nexport const 
     }
 
     loadPremiumStatus()
-
-    // Start tracking game time
     setGameStartTime(Date.now())
 
-    // App state listener for background/foreground transitions
     const subscription = AppState.addEventListener("change", (nextAppState) => {
       if (appState.match(/inactive|background/) && nextAppState === "active") {
-        // App has come to the foreground
         setGameStartTime(Date.now())
       }
       setAppState(nextAppState)
@@ -65,20 +62,16 @@ export type AdProviderProps = { children: React.ReactNode }\r\n\r\nexport const 
     }
   }, [])
 
-  // Check if it's time to show an ad
   useEffect(() => {
     if (isPremium || !gameStartTime) return
 
     const interval = setInterval(() => {
       const now = Date.now()
       const gameTimeInSeconds = (now - gameStartTime) / 1000
-
-      // Calculate time until next ad
       const timeSinceLastAd = lastAdTime ? (now - lastAdTime) / 1000 : 600
       const remainingTime = Math.max(0, 600 - timeSinceLastAd)
       setTimeUntilNextAd(Math.floor(remainingTime))
 
-      // Show ad after 10 minutes of gameplay if no ad shown recently
       if (gameTimeInSeconds > 600 && (!lastAdTime || now - lastAdTime > 600000)) {
         showAd()
       }
@@ -87,12 +80,11 @@ export type AdProviderProps = { children: React.ReactNode }\r\n\r\nexport const 
     return () => clearInterval(interval)
   }, [isPremium, gameStartTime, lastAdTime])
 
-  // Ad timer countdown
   useEffect(() => {
-    let timer: NodeJS.Timeout
+    let timer: ReturnType<typeof setInterval> | undefined
 
     if (adModalVisible) {
-      setAdTimer(30) // 30 seconds ad duration
+      setAdTimer(30)
 
       timer = setInterval(() => {
         setAdTimer((prev) => {
@@ -126,7 +118,7 @@ export type AdProviderProps = { children: React.ReactNode }\r\n\r\nexport const 
 
     setAdModalVisible(true)
     setLastAdTime(Date.now())
-    setGameStartTime(Date.now()) // Reset game time counter
+    setGameStartTime(Date.now())
     trackEvent("ad_shown", { type: "interstitial" })
 
     try {
@@ -169,4 +161,5 @@ export const useAd = () => {
   }
   return context
 }
-\r\n\r\nexport default AdContext\r\n
+
+export default AdContext

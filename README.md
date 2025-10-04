@@ -10,6 +10,10 @@ A collection of fun two-player games designed for kids to play together on a sin
 - Seasonal themes and special events
 - Premium mode to remove ads
 
+## Current Status (October 2025)
+
+All game runtimes are temporarily stubbed while we rebuild the new pipeline. Verification works, but gameplay screens currently show placeholder messaging until each title is re-implemented.
+
 ## Installation
 
 ### Prerequisites
@@ -108,3 +112,16 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 - Sound effects from [source]
 - Background music from [source]
 \`\`\`
+
+## Verification
+
+Run `npm run verify` to execute the TypeScript checks used by CI.
+
+
+
+
+## Rebuild Briefs
+
+- [Snakes Duel](docs/rebuild-snakes-duel.md)
+- [Air Hockey](docs/rebuild-air-hockey.md)
+

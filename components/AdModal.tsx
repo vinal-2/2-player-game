@@ -1,16 +1,24 @@
 "use client"
 
-import { View, Text, StyleSheet, Modal, TouchableOpacity, Image } from "react-native"
+import { View, Text, StyleSheet, Modal, TouchableOpacity, Image, ImageSourcePropType } from "react-native"
 import { useEffect, useState } from "react"
 import { Ionicons } from "@expo/vector-icons"
 import { useAd } from "../contexts/AdContext"
 import { useAnalytics } from "../contexts/AnalyticsContext"
 
-const AdModal = ({ visible }) => {
+type AdModalProps = { visible: boolean }
+
+type AdContent = {
+  title: string
+  description: string
+  image: ImageSourcePropType
+}
+
+const AdModal: React.FC<AdModalProps> = ({ visible }) => {
   const { closeAdModal } = useAd()
   const { trackEvent } = useAnalytics()
   const [timeLeft, setTimeLeft] = useState(30)
-  const [adContent, setAdContent] = useState({
+  const [adContent, setAdContent] = useState<AdContent>({
     title: "Premium Games Collection",
     description: "Upgrade to premium for an ad-free experience and exclusive games!",
     image: require("../assets/images/ad-image.png"),
@@ -22,7 +30,7 @@ const AdModal = ({ visible }) => {
       setTimeLeft(30)
 
       // Simulate different ads
-      const adOptions = [
+      const adOptions: AdContent[] = [
         {
           title: "Premium Games Collection",
           description: "Upgrade to premium for an ad-free experience and exclusive games!",
@@ -54,7 +62,7 @@ const AdModal = ({ visible }) => {
 
       return () => clearInterval(timer)
     }
-  }, [visible])
+  }, [trackEvent, visible])
 
   const handleAdClick = () => {
     trackEvent("ad_click", { ad_title: adContent.title })
@@ -182,3 +190,4 @@ const styles = StyleSheet.create({
 })
 
 export default AdModal
+

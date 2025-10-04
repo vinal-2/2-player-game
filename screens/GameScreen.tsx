@@ -8,24 +8,20 @@ import { useGame } from "../contexts/GameContext"
 import { useSound } from "../contexts/SoundContext"
 import { useAd } from "../contexts/AdContext"
 import { useAnalytics } from "../contexts/AnalyticsContext"
+import type { NativeStackScreenProps } from "@react-navigation/native-stack"
+import type { RootStackParamList } from "../navigation/types"
 
 import { getGameComponent } from "../core/gameRegistry"
 
-import AdModal from "../components/AdModal"\nimport type { GameMode, GameRuntimeEvent } from "../core/gameRuntime"
+import AdModal from "../components/AdModal"
+import type { GameMode, GameRuntimeEvent } from "../core/gameRuntime"
 import type { GameCatalogEntry } from "../core/gameCatalog"
 
 const DEFAULT_MODE: GameMode = "friend"
 
-type GameScreenProps = {
-  route: {
-    params: {
-      gameId: string
-    }
-  }
-  navigation: any
-}
+type GameScreenProps = NativeStackScreenProps<RootStackParamList, "Game">
 
-const GameScreen = ({ route, navigation }: GameScreenProps) => {
+const GameScreen = ({ route, navigation }: GameScreenProps): JSX.Element => {
   const { gameId } = route.params
   const { getGameById } = useGame()
   const { playSound } = useSound()
@@ -365,6 +361,8 @@ const styles = StyleSheet.create({
 })
 
 export default GameScreen
+
+
 
 
 

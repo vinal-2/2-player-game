@@ -1,51 +1,34 @@
-import type { GameController } from "../../core/GameEngine";
-import type { ConnectFourModel } from "./ConnectFourModel";
-import { InputManager } from "../../utils/InputManager";
+import type { GameController } from "../../core/GameEngine"
+import type ConnectFourModel from "./ConnectFourModel"
+import type { ConnectFourWinner } from "./ConnectFourModel"
 
-/**
- * Connect Four Game Controller
- *
- * Handles user input and updates the game model
- */
+export type ConnectFourControllerInput =
+  | { type: "reset" }
+  | { type: "finish"; winner: Exclude<ConnectFourWinner, null> }
+
 export class ConnectFourController implements GameController {
-  private model: ConnectFourModel;
-  private inputManager: InputManager;
+  constructor(private readonly model: ConnectFourModel) {}
 
-  constructor(model: ConnectFourModel) {
-    this.model = model;
-    this.inputManager = InputManager.getInstance();
-  }
-
-  /**
-   * Initializes the controller
-   */
   public initialize(): void {
-    this.inputManager.registerPressListener("board", (column) => {
-      this.handleInput({ type: "cellPress", column });
-    });
+    this.model.initialize()
   }
 
-  /**
-   * Handles any input
-   */
-  public handleInput(input: any): void {
+  public update(): void {
+    // No runtime loop required for placeholder
+  }
+
+  public handleInput(input: ConnectFourControllerInput): void {
     switch (input.type) {
-      case "cellPress":
-        const { column } = input;
-        this.model.makeMove(column);
-        break;
       case "reset":
-        this.model.reset();
-        break;
-      default:
-        break;
+        this.model.reset()
+        break
+      case "finish":
+        this.model.finish(input.winner)
+        break
     }
   }
 
-  /**
-   * Cleans up the controller
-   */
-  public cleanup(): void {
-    this.inputManager.removePressListener("board");
-  }
+  public cleanup(): void {}
 }
+
+export default ConnectFourController

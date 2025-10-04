@@ -1,57 +1,32 @@
-import type { GameController } from "../../core/GameEngine";
-import type { MiniGolfModel } from "./MiniGolfModel";
-import { InputManager } from "../../utils/InputManager";
+import type { GameController } from "../../core/GameEngine"
+import type MiniGolfModel from "./MiniGolfModel"
+import type { MiniGolfWinner } from "./MiniGolfModel"
 
-/**
- * Mini Golf Game Controller
- *
- * Handles user input and updates the game model
- */
+export type MiniGolfControllerInput =
+  | { type: "reset" }
+  | { type: "finish"; winner: Exclude<MiniGolfWinner, null> }
+
 export class MiniGolfController implements GameController {
-  private model: MiniGolfModel;
-  private inputManager: InputManager;
-
-  constructor(model: MiniGolfModel) {
-    this.model = model;
-    this.inputManager = InputManager.getInstance();
-  }
+  constructor(private readonly model: MiniGolfModel) {}
 
   public initialize(): void {
-    this.inputManager.registerShotListener("golf", ({ direction, force }) => {
-      this.handleInput({ type: "shot", direction, force });
-    });
+    this.model.initialize()
   }
 
-  public handleInput(input: {
-    type: string;
-    direction?: number;
-    force?: number;
-  }): void {
+  public update(): void {}
+
+  public handleInput(input: MiniGolfControllerInput): void {
     switch (input.type) {
-      case "shot":
-        const { direction, force } = input;
-        this.hitBall(direction, force);
-        break;
       case "reset":
-        this.model.reset();
-        break;
+        this.model.reset()
+        break
+      case "finish":
+        this.model.finish(input.winner)
+        break
     }
   }
 
-  private hitBall(direction: number, force: number): void {
-    const speedMultiplier = 0.5;
-    const xSpeed = Math.cos(direction) * force * speedMultiplier;
-    const ySpeed = Math.sin(direction) * force * speedMultiplier;
-    if (xSpeed !== undefined && ySpeed !== undefined) {
-        this.model.hitBall(xSpeed, ySpeed);
-        break;
-      case "reset":
-        this.model.reset();
-        break;
-    }
-  }
-
-  public cleanup(): void {
-    this.inputManager.removeShotListener("golf");
-  }
+  public cleanup(): void {}
 }
+
+export default MiniGolfController

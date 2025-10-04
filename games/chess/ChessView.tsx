@@ -1,155 +1,80 @@
-tsx
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ImageBackground, Image } from 'react-native';
-import { ChessState, PieceType, Player } from './ChessModel';
-import { Ionicons } from '@expo/vector-icons';
+import React from "react"
+import { View, Text, StyleSheet, TouchableOpacity } from "react-native"
+import type { ChessState } from "./ChessModel"
 
-interface ChessViewProps {
-  state: ChessState;
-  onReset: () => void;
-  onBack: () => void;
-  onSelectPiece: (row: number, col: number) => void;
-  onMovePiece: (from: { row: number, col: number }, to: { row: number, col: number }) => void;
+type ChessViewProps = {
+  state: ChessState
+  onReset: () => void
+  onBack: () => void
 }
 
-const ChessView: React.FC<ChessViewProps> = ({ state, onReset, onBack, onMovePiece, onSelectPiece }) => {
-
-  const gridSize = 8;
-  const squareSize = 40;
-
-  const getPieceImage = (pieceType: PieceType, player: Player) => {
-    const base = '../../assets/images/';
-    const color = player === 'white' ? 'white' : 'black';
-    switch (pieceType) {
-      case PieceType.Pawn: return require(`${base}${color}-pawn.png`);
-      case PieceType.Rook: return require(`${base}${color}-rook.png`);
-      case PieceType.Knight: return require(`${base}${color}-knight.png`);
-      case PieceType.Bishop: return require(`${base}${color}-bishop.png`);
-      case PieceType.Queen: return require(`${base}${color}-queen.png`);
-      case PieceType.King: return require(`${base}${color}-king.png`);
-      default: return null;
-    }
-  };
-
-  const renderBoard = () => {
-    const board: JSX.Element[] = [];
-    for (let row = 0; row < gridSize; row++) {
-      for (let col = 0; col < gridSize; col++) {
-        const isBlack = (row + col) % 2 === 1;
-        let squareColor = isBlack ? 'grey' : 'white';
-        const piece = state.board[row][col];
-        let isPossibleMove = false;
-        
-        if (state.selectedPiece) {
-          isPossibleMove = state.possibleMoves.some(
-            (move) => move.row === row && move.col === col
-          );
-        }
-
-        if (state.selectedPiece && state.selectedPiece.row === row && state.selectedPiece.col === col) {
-          squareColor = 'yellow'; // Highlight selected piece
-        } else if (isPossibleMove) {
-          squareColor = 'lightgreen'; // Highlight possible moves
-        }
-
-        board.push(          
-          <TouchableOpacity
-            key={`square-${row}-${col}`}
-            style={[styles.square, { backgroundColor: squareColor, width: squareSize, height: squareSize }]}
-            onPress={() => handleSquarePress(row, col)}
-          >
-            {piece && getPieceImage(piece.type, piece.player) && (
-              <Image source={getPieceImage(piece.type, piece.player)} style={styles.piece} />
-            )}
-          </TouchableOpacity>
-        );
-        
-      }
-    }
-    return board;
-  };
-
-  const handleSquarePress = (row: number, col: number) => {
-    if (state.selectedPiece) {
-      onMovePiece({ row: state.selectedPiece.row, col: state.selectedPiece.col }, { row, col });
-    } else {
-      onSelectPiece(row, col);
-    }
-  };
-
+const ChessView: React.FC<ChessViewProps> = ({ state, onReset, onBack }) => {
   return (
-    <ImageBackground source={require('../../assets/images/chess-bg.png')} style={styles.backgroundImage}>
-      <View style={styles.container}>
-        <View style={styles.header}>
-          <TouchableOpacity style={styles.backButton} onPress={onBack}>
-            <Ionicons name="arrow-back" size={24} color="white" />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.resetButton} onPress={onReset}>
-            <Ionicons name="refresh" size={24} color="white" />
-          </TouchableOpacity>
-        </View>
-        <View style={styles.boardContainer}>
-          {renderBoard()}
-        </View>
-          {state.gameOver && state.winner && <View style={styles.winnerContainer}><Text style={styles.winner}>{state.winner === 'draw' ? "Draw" : `${state.winner} wins!`}</Text></View>}
-      </View>
-    </ImageBackground>
-  );
-};
+    <View style={styles.container}>
+      <Text style={styles.title}>Chess</Text>
+      <Text style={styles.subtitle}>We are rebuilding the full chess experience.</Text>
+      <Text style={styles.status}>Status: {state.status}</Text>
+      {state.winner && <Text style={styles.status}>Winner: {state.winner}</Text>}
+
+      <TouchableOpacity style={styles.primaryButton} onPress={onReset}>
+        <Text style={styles.primaryText}>Reset Placeholder</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity style={styles.secondaryButton} onPress={onBack}>
+        <Text style={styles.secondaryText}>Back to Games</Text>
+      </TouchableOpacity>
+    </View>
+  )
+}
 
 const styles = StyleSheet.create({
-  backgroundImage: {
-    flex: 1,
-    resizeMode: 'cover',
-    justifyContent: 'center',
-  },
   container: {
     flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 24,
+    backgroundColor: "#111827",
   },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    width: '100%',
-    padding: 20,
-    position: 'absolute',
-    top: 0,
+  title: {
+    fontSize: 28,
+    fontWeight: "700",
+    color: "#f8fafc",
+    marginBottom: 12,
   },
-  backButton: {
-    padding: 10,
+  subtitle: {
+    fontSize: 16,
+    color: "#e2e8f0",
+    textAlign: "center",
+    marginBottom: 24,
   },
-  resetButton: {
-    padding: 10,
+  status: {
+    fontSize: 14,
+    color: "#cbd5f5",
+    marginBottom: 8,
   },
-  boardContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    width: 320,
-    height: 320,
+  primaryButton: {
+    marginTop: 24,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: "#6366f1",
   },
-  square: {
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1
-  },
-  piece: {
-    width: 30,
-    height: 30,
-    resizeMode: 'contain',
-  },
-  winnerContainer: {
-    position: "absolute",
-    backgroundColor: "rgba(0, 0, 0, 0.8)",
-    padding: 10,
-    borderRadius: 10,
-  },
-  winner: {
+  primaryText: {
     color: "white",
-    fontSize: 20,
-    fontWeight: "bold",
-  }
-});
+    fontWeight: "600",
+  },
+  secondaryButton: {
+    marginTop: 12,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#4c1d95",
+  },
+  secondaryText: {
+    color: "#c4b5fd",
+    fontWeight: "600",
+  },
+})
 
-export default ChessView;
+export default ChessView

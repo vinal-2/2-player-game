@@ -1,90 +1,54 @@
-tsx
 "use client"
 
-import type React from "react"
 import { useEffect, useState } from "react"
-import { SafeAreaView, ImageBackground } from "react-native"
-import { GameEngine } from "../../core/GameEngine"
-import { useSound } from "../../contexts/SoundContext"
+import { SafeAreaView, StyleSheet } from "react-native"
 import { useAnalytics } from "../../contexts/AnalyticsContext"
-import { useSeasonal } from "../../contexts/SeasonalContext"
+import { useSound } from "../../contexts/SoundContext"
 import ConnectFourView from "./ConnectFourView"
 import ConnectFourModel from "./ConnectFourModel"
 import ConnectFourController from "./ConnectFourController"
+import type { GameRuntimeProps } from "../../core/gameRuntime"
 
-interface ConnectFourScreenProps {
-  route: {
-    params: {
-      mode: "friend" | "bot"
-    }
-  }
-  navigation: any
-}
-
-const ConnectFourScreen: React.FC<ConnectFourScreenProps> = ({ route, navigation }) => {
-  const { mode } = route.params
-  const { playSound } = useSound()
+const ConnectFourScreen: React.FC<GameRuntimeProps> = ({ gameId, mode, onExit, onEvent }) => {
   const { trackEvent } = useAnalytics()
-  const { getSeasonalGameBackground } = useSeasonal()
-
+  const { playSound } = useSound()
   const [model] = useState(() => new ConnectFourModel())
-  const [controller] = useState(() => new ConnectFourController(model, mode))
-
-  const gameEngine = GameEngine.getInstance()
+  const [controller] = useState(() => new ConnectFourController(model))
 
   useEffect(() => {
-    gameEngine.registerGame("connectFour", model, controller)
-
-    model.setOnGameOver((winner) => {
-      if (winner === "draw") {
-        playSound("draw")
-        trackEvent("game_draw", { game: "connectFour" })
-      } else {
-        playSound("win")
-        trackEvent("game_over", { game: "connectFour", winner })
-      }
-    })
-
-    gameEngine.startGame("connectFour")
+    controller.initialize()
+    trackEvent("game_start", { game_id: gameId, mode })
     playSound("game-start")
-    trackEvent("game_start", { game: "connectFour", mode })
+    onEvent?.({ type: "custom", payload: { action: "connect-four_start" } })
 
     return () => {
-      gameEngine.stopGame()
       controller.cleanup()
+      model.reset()
     }
-  }, [])
+  }, [controller, gameId, mode, model, onEvent, playSound, trackEvent])
 
   const handleReset = () => {
     controller.handleInput({ type: "reset" })
     playSound("game-start")
-    trackEvent("game_reset", { game: "connectFour" })
+    trackEvent("game_reset", { game_id: gameId })
   }
 
   const handleBack = () => {
     playSound("button-press")
-    navigation.goBack()
+    onExit()
   }
-
-  const handleCellPress = (column: number) => {
-    playSound("cell-tap")
-    controller.handleInput({ type: "cellPress", column })
-  }
-
-  const backgroundImage = getSeasonalGameBackground("connect-four") || require("../../assets/images/connect-four-bg.png")
 
   return (
-    <ImageBackground source={backgroundImage} style={{ flex: 1 }}>
-      <SafeAreaView style={{ flex: 1 }}>
-        <ConnectFourView
-          state={model.state}
-          onReset={handleReset}
-          onBack={handleBack}
-          onCellPress={handleCellPress}
-        />
-      </SafeAreaView>
-    </ImageBackground>
+    <SafeAreaView style={styles.container}>
+      <ConnectFourView state={model.state} onReset={handleReset} onBack={handleBack} />
+    </SafeAreaView>
   )
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
+})
 
 export default ConnectFourScreen
